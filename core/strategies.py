@@ -2,6 +2,7 @@ import abc
 import copy
 import re
 
+import games
 import gym
 import numpy as np
 
@@ -49,6 +50,7 @@ class HumanStrategy(Strategy):
         action = re.split(r'\s+', input("> "))
         # Try to cast the action to t or array[t]
         if isinstance(self.env.action_space, gym.spaces.Discrete):
+            action = action[0]
             action = t(action)
         else:
             action = np.array(t(a) for a in action)
@@ -107,29 +109,30 @@ class MonteCarloTree(Strategy):
         :param selection_policy: str/function-like - function that will be used to select a child during selection phase
                                  Can be either a function (root: MonteCarloTreeNode, children: [MonteCarloTreeNode]) ->
                                  selected_node: MonteCarloTreeNode (in children), or a string representing the
-                                 function to apply, one of the following: {'random', 'uct' (UCT: C=sqrt(2))}.
+                                 function to apply, one of the following: {'random', 'uct' (UCT: C=sqrt(2))}. Default
+                                 'uct'.
         :param expansion_policy: str/function-like - function that will be used to select the expanded node during
                                  expansion phase
-                                 Can be either a function (children_action: [(node: MonteCarloTreeNode,
-                                 action: object)]) -> (node: MonteCarloTreeNode, action: object), or a string
-                                 representing the function to apply, one of the following: {'random'}.
+                                 Can be either a function (obs_action: [(observation: object, action: object)]) -> (
+                                 node: MonteCarloTreeNode, action: object), or a string representing the function to
+                                 apply, one of the following: {'random'}. Default 'random'.
         :param simulation_policy: str/function-like - function that will be used to select the move that will be
                                   played in each state of the self-play phase
                                   Can be either a function (action_info: [(action: object, info: (return of
                                   env.step))]) -> (action: object, info: (...))), or a string  representing the
-                                  function to apply, one of the following: {'random'}.
+                                  function to apply, one of the following: {'random'}. Default 'random'.
         :param backpropagation_policy: str/function-like - function that will be used to update the value of each
                                        node during backpropagation
                                        Can be either a function (node: MonteCarloTreeNode) -> value: number, or a string
                                        representing the function to apply, one of the following: {'mean' (value_sum /
-                                       visit_count)}.
+                                       visit_count)}. Default 'mean'.
         :param best_node_policy: str/function-like - function that will be used to select the returned action at the
                                  end of the algorithm
                                  Can be either a function (node: MonteCarloTreeNode) -> value: number (node with
                                  highest value will be chosen), or a string representing the function to apply,
-                                 one of the following: {'count' (visit_count)}.
+                                 one of the following: {'count' (visit_count)}. Default 'count'.
         """
-        if player not in (BLACK, WHITE):
+        if player not in (games.BLACK, games.WHITE):
             raise ValueError(f"player must be either game.WHITE={WHITE} or game.BLACK={BLACK}; found: {player}")
 
         self._env = env
@@ -176,9 +179,10 @@ class MonteCarloTree(Strategy):
         root = MonteCarloTreeNode(observation)
         root.visit_count += 1
 
+        # Iterate the algorithm max_iter times
         for _ in range(self.max_iter):
-            history = [root]
             # Reset search every iteration
+            history = [root]
             env = copy.deepcopy(self._env)
             done = False
             reward = 0
@@ -192,14 +196,16 @@ class MonteCarloTree(Strategy):
 
                 # Take the action
                 _, reward, done, _ = env.step(action)
+                # Update reward: if WHITE won reward=1, but if we are black reward should be -1 as we lost
                 reward *= self._player
                 history.append(current_node)
 
-            # We might have found a real leaf node during selection
+            # We might have found a real leaf node during selection so there is no need to expand or simulate
             if not done:
                 # Expansion phase
                 parent = current_node
                 current_node, action = self._expand(env, parent)
+                # Add expanded node to parent
                 parent.children[current_node.observation] = current_node
                 history.append(current_node)
                 env.step(action)
@@ -211,7 +217,7 @@ class MonteCarloTree(Strategy):
             for node in reversed(history):
                 self._backpropagate(node, reward)
 
-        # Finally choose the best action at the root according to the strategy
+        # Finally choose the best action at the root according to the policy
         actions = self._env.legal_actions()
         children = []
         for action in actions:
@@ -223,42 +229,52 @@ class MonteCarloTree(Strategy):
         print("\n".join(str((c.observation, c.visit_count)) for _, c in children))
         return max(children, key=lambda act_node: self._best_node_policy(act_node[1]))[0]
 
-    # TODO maybe remove children from the arguments of the function as they are stored in parent
     def _select(self, env, root):
         actions = env.legal_actions()
         children = []
+        # Sort children in the same order as the actions
         for action in actions:
             observation, _, _, _ = env.fake_step(action)
-            child = root.children[observation]
-            children.append(child)
+            children.append(root.children[observation])
+        # Select the child
         child = self._selection_policy(root, children)
         index = children.index(child)
         return child, actions[index]
 
     def _expand(self, env, root):
         actions = env.legal_actions()
-        children_action = []
+        obs_action = []
+        # Filter non visited states
         for action in actions:
             observation, _, _, _ = env.fake_step(action)
             if observation not in root.children:
-                children_action.append((MonteCarloTreeNode(observation), action))
-        return self._expansion_policy(children_action)
+                obs_action.append((observation, action))
+        # Select the child (and the action)
+        observation, action = self._expansion_policy(obs_action)
+        return MonteCarloTreeNode(observation), action
 
     def _simulate(self, env):
         winner = env.winner()
         done = winner is not None
         reward = 0 if not done else winner
+        # Simulate until the end of the game
         while not done:
             actions = env.legal_actions()
+            # Zip each action with its corresponding result of the step (observation, reward, done, info)
             act_info = [(action, env.fake_step(action)) for action in actions]
             action = self._simulation_policy(act_info)
+            # Take the actual step
             _, reward, done, _ = env.step(action)
         return reward
 
     # TODO check if it matters whose turn is in a node
     def _backpropagate(self, node, reward):
+        # Use reward in [0, 1], where loss=0, draw=.5, win=1
+        reward = (reward + 1) / 2
+        # First update all basic fields of the node
         node.value_sum += reward
         node.visit_count += 1
+        # Then update its value
         node.value = self._backpropagation_policy(node)
 
     @staticmethod
@@ -274,7 +290,7 @@ class MonteCarloTree(Strategy):
     def _expansion_policy_from_string(string):
         string = string.lower()
         if string == 'random':
-            return lambda children_action: children_action[np.random.choice(len(children_action))]
+            return lambda obs_action: obs_action[np.random.choice(len(obs_action))]
         return None
 
     @staticmethod
@@ -309,7 +325,7 @@ def uct(c):
     """
 
     def uctc(root, children):
-        values = np.array([child.value_sum / child.visit_count for child in children])
+        values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
         uct_values = values + c * np.sqrt(np.log(root.visit_count) / visits)
         return children[np.argmax(uct_values)]
