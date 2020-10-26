@@ -2,9 +2,10 @@ import abc
 import copy
 import re
 
-import games
 import gym
 import numpy as np
+
+import tfg.games
 
 
 class Strategy(abc.ABC):
@@ -132,8 +133,9 @@ class MonteCarloTree(Strategy):
                                  highest value will be chosen), or a string representing the function to apply,
                                  one of the following: {'count' (visit_count)}. Default 'count'.
         """
-        if player not in (games.BLACK, games.WHITE):
-            raise ValueError(f"player must be either game.WHITE={WHITE} or game.BLACK={BLACK}; found: {player}")
+        if player not in (tfg.games.BLACK, tfg.games.WHITE):
+            raise ValueError(f"player must be either game.WHITE={tfg.games.WHITE} or game.BLACK={tfg.games.BLACK}; "
+                             f"found: {player}")
 
         self._env = env
         self._player = player
