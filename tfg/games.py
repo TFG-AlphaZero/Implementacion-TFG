@@ -23,11 +23,12 @@ class GameEnv(gym.Env, abc.ABC):
         """
         raise NotImplementedError
 
-    # TODO maybe substitute with step(bool)
-    def fake_step(self, action):
+    def step(self, action, fake=False):
         """
-        Similar to step(action) in gym.Env, but it doesn't update the current state.
+        Overriding step in gym.Env to allow taking "fake steps" where the environment (the game) doesn't get it state
+        updated.
         :param action: object - an action provided by the player
+        :param fake: bool - whether to update the state or only return the result (default: False)
         :return: same as gym.Env.step
         """
         raise NotImplementedError
@@ -125,38 +126,37 @@ class DummyGame(GameEnv):
     def _create_board(n):
         return np.arange(1, n + 1, dtype=np.int32)
 
-    def step(self, action):
-        self.board = self.board.copy()
-        self.scores = self.scores.copy()
-        if action == 0:
-            score = self.board[self.left]
-            self.board[self.left] = 0
-            self.left += 1
-        elif action == 1:
-            self.right -= 1
-            score = self.board[self.right]
-            self.board[self.right] = 0
-        else:
-            raise ValueError(f"action must be 0 (left) or 1 (right) - found {action}")
-        self.scores[self._to_play] += score
-        self._to_play = (self._to_play + 1) % 2
-        reward = 0 if not self.done() else self.winner()
-        return DummyGameObservation(self.board, self.scores), reward, self.done(), {}
-
-    def fake_step(self, action):
+    def step(self, action, fake=False):
         board = self.board.copy()
         scores = self.scores.copy()
+        left = self.left
+        right = self.right
         if action == 0:
-            score = board[self.left]
-            board[self.left] = 0
+            score = board[left]
+            board[left] = 0
+            left += 1
         elif action == 1:
-            score = board[self.right - 1]
-            board[self.right - 1] = 0
+            right -= 1
+            score = board[right]
+            board[right] = 0
         else:
             raise ValueError(f"action must be 0 (left) or 1 (right) - found {action}")
         scores[self._to_play] += score
-        # If it was the last move then it's done
-        return DummyGameObservation(board, scores), score, self.is_last_move(), {}
+
+        if fake:
+            # If it was the last move then it's done
+            done = self.is_last_move()
+            reward = 0 if not done else 1 if scores[0] > scores[1] else -1 if scores[1] > scores[0] else 0
+            return DummyGameObservation(board, scores), reward, done, {}
+
+        # Update state
+        self.board = board
+        self.scores = scores
+        self.left = left
+        self.right = right
+        self._to_play = (self._to_play + 1) % 2
+        reward = 0 if not self.done() else self.winner()
+        return DummyGameObservation(self.board, self.scores), reward, self.done(), {}
 
     def reset(self):
         n = len(self.board)

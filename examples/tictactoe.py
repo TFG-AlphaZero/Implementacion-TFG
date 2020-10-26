@@ -19,27 +19,27 @@ class TicTacToe(GameEnv):
     def to_play(self):
         return self._to_play
 
-    def fake_step(self, action):
-        self._check_action(action)
-        i, j = self._parse_action(action)
-        board = self.board.copy()
-        board[i, j] = self._to_play
-        reward, done = self._check_board(board, i, j)
-        return TicTacToeObservation(board), reward, done, {}
-
     def legal_actions(self):
         return [i for i, cell in enumerate(self.board.flatten()) if cell == 0]
 
     def winner(self):
         return self._winner
 
-    def step(self, action):
-        observation, reward, done, info = self.fake_step(action)
-        self.board = observation.board
+    def step(self, action, fake=False):
+        self._check_action(action)
+        i, j = self._parse_action(action)
+        board = self.board.copy()
+        board[i, j] = self._to_play
+        reward, done = self._check_board(board, i, j)
+
+        if fake:
+            return TicTacToeObservation(board), reward, done, {}
+
+        self.board = board
         if done:
             self._winner = reward
         self._to_play *= -1
-        return observation, reward, done, info
+        return TicTacToeObservation(self.board), reward, done, {}
 
     def reset(self):
         self.board = np.zeros(shape=(3, 3))

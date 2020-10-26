@@ -223,7 +223,7 @@ class MonteCarloTree(Strategy):
         actions = self._env.legal_actions()
         children = []
         for action in actions:
-            observation, _, _, _ = self._env.fake_step(action)
+            observation, _, _, _ = self._env.step(action, fake=True)
             if observation in root.children:
                 children.append((action, root.children[observation]))
 
@@ -236,7 +236,7 @@ class MonteCarloTree(Strategy):
         children = []
         # Sort children in the same order as the actions
         for action in actions:
-            observation, _, _, _ = env.fake_step(action)
+            observation, _, _, _ = env.step(action, fake=True)
             children.append(root.children[observation])
         # Select the child
         child = self._selection_policy(root, children)
@@ -248,7 +248,7 @@ class MonteCarloTree(Strategy):
         obs_action = []
         # Filter non visited states
         for action in actions:
-            observation, _, _, _ = env.fake_step(action)
+            observation, _, _, _ = env.step(action, fake=True)
             if observation not in root.children:
                 obs_action.append((observation, action))
         # Select the child (and the action)
@@ -263,7 +263,7 @@ class MonteCarloTree(Strategy):
         while not done:
             actions = env.legal_actions()
             # Zip each action with its corresponding result of the step (observation, reward, done, info)
-            act_info = [(action, env.fake_step(action)) for action in actions]
+            act_info = [(action, env.step(action, fake=True)) for action in actions]
             action = self._simulation_policy(act_info)
             # Take the actual step
             _, reward, done, _ = env.step(action)
