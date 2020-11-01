@@ -1,5 +1,6 @@
 import abc
 import copy
+import random
 import re
 
 import gym
@@ -58,6 +59,110 @@ class HumanStrategy(Strategy):
         if action not in self.env.action_space:
             raise ValueError(f"given action {action} is not contained in the action space")
         return action
+
+
+# TODO docs
+class Minimax(Strategy):
+
+    def __init__(self, env, player, max_depth=None, heuristic=None, alpha_beta=True,
+                 ordering=lambda x: random.random()):
+
+        if max_depth is not None and heuristic is None:
+            raise ValueError("max_depth was given but heuristic wasn't")
+
+        self._env = env
+        self._player = player
+        self.max_depth = max_depth
+        self._heuristic = heuristic
+        self.alpha_beta = alpha_beta
+        self.ordering = ordering
+
+    def move(self, observation):
+        action, _ = self._minimax(self._env, observation) if not self.alpha_beta else \
+            self._alpha_beta(self._env, observation)
+        return action
+
+    def _minimax(self, env, observation, depth=0):
+        to_play = env.to_play
+        if self.max_depth is not None and depth == self.max_depth:
+            # Use the heuristic if we reached the maximum depth
+            return None, self._heuristic(observation, to_play)
+
+        legal_actions = self._legal_actions(env)
+        selected_action = None
+        value = None
+
+        for action in legal_actions:
+            env_ = copy.deepcopy(env)
+            obs, reward, done, _ = env_.step(action)
+
+            if not done:
+                _, reward = self._minimax(env_, obs, depth + 1)
+
+            if selected_action is None or self._better_value(value, reward, to_play):
+                selected_action = action
+                value = reward
+
+        # Return the selected action at the root
+        return selected_action, value
+
+    def _alpha_beta(self, env, observation, depth=0, alpha=None, beta=None):
+        to_play = env.to_play
+        if self.max_depth is not None and depth == self.max_depth:
+            # Use the heuristic if we reached the maximum depth
+            return None, self._heuristic(observation, to_play)
+
+        legal_actions = self._legal_actions(env)
+        selected_action = None
+
+        if self._player == tfg.games.WHITE and self._player == to_play or \
+                self._player == tfg.games.BLACK and self._player != to_play:
+            # Alpha
+            for action in legal_actions:
+                env_ = copy.deepcopy(env)
+                obs, reward, done, _ = env_.step(action)
+
+                if not done:
+                    _, reward = self._alpha_beta(env_, obs, depth + 1, alpha, beta)
+
+                if alpha is None or alpha < reward:
+                    selected_action = action
+                    alpha = reward
+                    if beta is not None and alpha >= beta:
+                        break
+            return selected_action, alpha
+        else:
+            # Beta
+            for action in legal_actions:
+                env_ = copy.deepcopy(env)
+                obs, reward, done, _ = env_.step(action)
+
+                if not done:
+                    _, reward = self._alpha_beta(env_, obs, depth + 1, alpha, beta)
+
+                if beta is None or beta > reward:
+                    selected_action = action
+                    beta = reward
+                    if alpha is not None and alpha >= beta:
+                        break
+            return selected_action, beta
+
+    def _better_value(self, current, new, to_play):
+        # Work with (win, >0), (lose, <0)
+        current = self._player * current
+        new = self._player * new
+        if self._player == to_play and new > current:
+            return True
+        if self._player != to_play and new < current:
+            return True
+        return False
+
+    def _legal_actions(self, env):
+        legal_actions = env.legal_actions()
+        # Sort if necessary
+        if self.ordering is not None:
+            legal_actions.sort(key=self.ordering)
+        return legal_actions
 
 
 class MonteCarloTreeNode:
@@ -228,7 +333,7 @@ class MonteCarloTree(Strategy):
                 children.append((action, root.children[observation]))
 
         # TODO remove
-        print("\n".join(str((c.observation, c.visit_count)) for _, c in children))
+        # print("\n".join(str((c.observation, c.visit_count)) for _, c in children))
         return max(children, key=lambda act_node: self._best_node_policy(act_node[1]))[0]
 
     def _select(self, env, root):

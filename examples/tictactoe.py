@@ -2,7 +2,8 @@ import numpy as np
 from gym.spaces import Discrete, Box
 
 from tfg.games import GameEnv, WHITE, BLACK
-from tfg.strategies import HumanStrategy, MonteCarloTree, uct
+from tfg.strategies import Minimax, MonteCarloTree, uct
+from tfg.util import play
 
 
 class TicTacToe(GameEnv):
@@ -105,39 +106,12 @@ class TicTacToeObservation:
         return str(self)
 
 
-def play(game, s1, s2, render=False):
-    def print_winner():
-        game.render(mode='human')
-        winner = game.winner()
-        if winner == 0:
-            print("DRAW")
-        else:
-            print(f"PLAYER {'1' if winner == 1 else '2'} WON")
-
-    observation = game.reset()
-    if render and not isinstance(s1, HumanStrategy):
-        game.render()
-
-    while True:
-        action = s1.move(observation)
-        observation, _, done, _ = game.step(action)
-        if done:
-            print_winner()
-            break
-        elif render and not isinstance(s2, HumanStrategy):
-            game.render()
-        action = s2.move(observation)
-        observation, _, done, _ = game.step(action)
-        if done:
-            print_winner()
-            break
-        elif render and not isinstance(s1, HumanStrategy):
-            game.render()
-
-
 if __name__ == '__main__':
     game = TicTacToe()
-    s1 = HumanStrategy(game, 'PLAYER 1')
     # uct(3) seems to work a bit better than uct(sqrt(2))
-    s2 = MonteCarloTree(game, BLACK, 10_000, selection_policy=uct(3))
-    play(game, s1, s2, render=True)
+    s1 = MonteCarloTree(game, WHITE, 1000, selection_policy=uct(3))
+    s2 = Minimax(game, BLACK)
+    p1_wins, draws, p2_wins = play(game, s1, s2)
+    print(f"Monte Carlo wins: {p1_wins}")
+    print(f"Minimax wins: {p2_wins}")
+    print(f"Draws: {draws}")
