@@ -64,25 +64,25 @@ class HumanStrategy(Strategy):
 # TODO docs
 class Minimax(Strategy):
 
-    def __init__(self, env, player, max_depth=None, heuristic=None, alpha_beta=True,
+    def __init__(self, env, max_depth=None, heuristic=None, alpha_beta=True,
                  ordering=lambda x: random.random()):
 
         if max_depth is not None and heuristic is None:
             raise ValueError("max_depth was given but heuristic wasn't")
 
         self._env = env
-        self._player = player
         self.max_depth = max_depth
         self._heuristic = heuristic
         self.alpha_beta = alpha_beta
         self.ordering = ordering
 
     def move(self, observation):
-        action, _ = self._minimax(self._env, observation) if not self.alpha_beta else \
-            self._alpha_beta(self._env, observation)
+        player = self._env.to_play
+        action, _ = self._minimax(self._env, observation, player) if not self.alpha_beta else \
+            self._alpha_beta(self._env, observation, player)
         return action
 
-    def _minimax(self, env, observation, depth=0):
+    def _minimax(self, env, observation, player, depth=0):
         to_play = env.to_play
         if self.max_depth is not None and depth == self.max_depth:
             # Use the heuristic if we reached the maximum depth
@@ -97,16 +97,16 @@ class Minimax(Strategy):
             obs, reward, done, _ = env_.step(action)
 
             if not done:
-                _, reward = self._minimax(env_, obs, depth + 1)
+                _, reward = self._minimax(env_, obs, player, depth + 1)
 
-            if selected_action is None or self._better_value(value, reward, to_play):
+            if selected_action is None or self._better_value(value, reward, player, to_play):
                 selected_action = action
                 value = reward
 
         # Return the selected action at the root
         return selected_action, value
 
-    def _alpha_beta(self, env, observation, depth=0, alpha=None, beta=None):
+    def _alpha_beta(self, env, observation, player, depth=0, alpha=None, beta=None):
         to_play = env.to_play
         if self.max_depth is not None and depth == self.max_depth:
             # Use the heuristic if we reached the maximum depth
@@ -115,15 +115,15 @@ class Minimax(Strategy):
         legal_actions = self._legal_actions(env)
         selected_action = None
 
-        if self._player == tfg.games.WHITE and self._player == to_play or \
-                self._player == tfg.games.BLACK and self._player != to_play:
+        if player == tfg.games.WHITE and player == to_play or \
+                player == tfg.games.BLACK and player != to_play:
             # Alpha
             for action in legal_actions:
                 env_ = copy.deepcopy(env)
                 obs, reward, done, _ = env_.step(action)
 
                 if not done:
-                    _, reward = self._alpha_beta(env_, obs, depth + 1, alpha, beta)
+                    _, reward = self._alpha_beta(env_, obs, player, depth + 1, alpha, beta)
 
                 if alpha is None or alpha < reward:
                     selected_action = action
@@ -138,7 +138,7 @@ class Minimax(Strategy):
                 obs, reward, done, _ = env_.step(action)
 
                 if not done:
-                    _, reward = self._alpha_beta(env_, obs, depth + 1, alpha, beta)
+                    _, reward = self._alpha_beta(env_, obs, player, depth + 1, alpha, beta)
 
                 if beta is None or beta > reward:
                     selected_action = action
@@ -147,13 +147,14 @@ class Minimax(Strategy):
                         break
             return selected_action, beta
 
-    def _better_value(self, current, new, to_play):
+    @staticmethod
+    def _better_value(current, new, player, to_play):
         # Work with (win, >0), (lose, <0)
-        current = self._player * current
-        new = self._player * new
-        if self._player == to_play and new > current:
+        current = player * current
+        new = player * new
+        if player == to_play and new > current:
             return True
-        if self._player != to_play and new < current:
+        if player != to_play and new < current:
             return True
         return False
 
@@ -206,11 +207,10 @@ class MonteCarloTree(Strategy):
     """
 
     # TODO (maybe) don't make policies return a node, rather a value for each node
-    def __init__(self, env, player, max_iter, selection_policy=None, expansion_policy=None, simulation_policy=None,
+    def __init__(self, env, max_iter, selection_policy=None, expansion_policy=None, simulation_policy=None,
                  backpropagation_policy=None, best_node_policy=None):
         """
         :param env: GameEnv - game this strategy is for
-        :param player: {-1, 1} - player playing this strategy (game.WHITE=1, game.BLACK=-1)
         :param max_iter: int - total number of iterations of the algorithm for each move
         :param selection_policy: str/function-like - function that will be used to select a child during selection phase
                                  Can be either a function (root: MonteCarloTreeNode, children: [MonteCarloTreeNode]) ->
@@ -238,12 +238,8 @@ class MonteCarloTree(Strategy):
                                  highest value will be chosen), or a string representing the function to apply,
                                  one of the following: {'count' (visit_count)}. Default 'count'.
         """
-        if player not in (tfg.games.BLACK, tfg.games.WHITE):
-            raise ValueError(f"player must be either game.WHITE={tfg.games.WHITE} or game.BLACK={tfg.games.BLACK}; "
-                             f"found: {player}")
 
         self._env = env
-        self._player = player
         self.max_iter = max_iter
 
         self._selection_policy = self._selection_policy_from_string(selection_policy) \
@@ -282,6 +278,8 @@ class MonteCarloTree(Strategy):
         def _fully_expanded(n):
             return len(n.children) == len(env.legal_actions())
 
+        player = self._env.to_play
+
         # Initialize tree
         root = MonteCarloTreeNode(observation)
         root.visit_count += 1
@@ -304,7 +302,7 @@ class MonteCarloTree(Strategy):
                 # Take the action
                 _, reward, done, _ = env.step(action)
                 # Update reward: if WHITE won reward=1, but if we are black reward should be -1 as we lost
-                reward *= self._player
+                reward *= player
                 history.append(current_node)
 
             # We might have found a real leaf node during selection so there is no need to expand or simulate
@@ -318,7 +316,7 @@ class MonteCarloTree(Strategy):
                 env.step(action)
 
                 # Simulation phase
-                reward = self._simulate(env) * self._player
+                reward = self._simulate(env) * player
 
             # Backpropagation phase
             for node in reversed(history):
