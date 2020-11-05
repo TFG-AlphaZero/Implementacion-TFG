@@ -401,7 +401,7 @@ class MonteCarloTree(Strategy):
         if string == 'random':
             return lambda root, children: np.random.choice(len(children))
         elif string == 'uct':
-            return uct(np.sqrt(2))
+            return UCT(np.sqrt(2))
         return None
 
     @staticmethod
@@ -433,19 +433,22 @@ class MonteCarloTree(Strategy):
         return None
 
 
-def uct(c):
+class UCT:
     """
-    Returns the function that implements the UCT formula to select a node in the selection phase of the MCTS algorithm:
+    Class representing the UCT formula to select a node in the selection phase of the MCTS algorithm:
         argmax_k {v(k) + C * sqrt( Log(n(N)) / n(k) )},
     where N is the parent node, k is in children(N) and C is a constant (typically sqrt(2)).
-    :param c: float - exploration constant C
-    :return: function (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int - the actual UCT function
+    It is a functional class : (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int
     """
 
-    def uctc(root, children):
+    def __init__(self, c):
+        """
+        :param c: float - exploration constant C
+        """
+        self.c = c
+
+    def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
-        uct_values = values + c * np.sqrt(np.log(root.visit_count) / visits)
+        uct_values = values + self.c * np.sqrt(np.log(root.visit_count) / visits)
         return np.argmax(uct_values)
-
-    return uctc

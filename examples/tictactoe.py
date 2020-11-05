@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from gym.spaces import Discrete, Box
 
@@ -111,14 +113,18 @@ if __name__ == '__main__':
     s1 = MonteCarloTree(game, 1000)
     s2 = Minimax(game)
 
-    p1_wins, draws, p2_wins = play(game, s1, s2, games=10)
+    now = time.time()
+    p1_wins, draws, p2_wins = play(game, s1, s2, games=50, max_workers=5)
     print("Monte Carlo as WHITE")
     print(f" * Monte Carlo wins: {p1_wins}")
     print(f" * Minimax wins: {p2_wins}")
     print(f" * Draws: {draws}")
+    print(f"Finished in {time.time() - now} sec")
 
-    p1_wins, draws, p2_wins = play(game, s2, s1, games=10)
+    now = time.time()
+    p1_wins, draws, p2_wins = play(game, s2, s1, games=50, max_workers=5)
     print("Monte Carlo as BLACK")
     print(f" * Monte Carlo wins: {p2_wins}")
     print(f" * Minimax wins: {p1_wins}")
     print(f" * Draws: {draws}")
+    print(f"Finished in {time.time() - now} sec")
