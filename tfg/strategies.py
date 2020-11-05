@@ -171,21 +171,23 @@ class MonteCarloTreeNode:
     Node used during the Monte Carlo Tree Search algorithm.
     """
 
-    def __init__(self, observation):
+    def __init__(self, observation, to_play):
         """
         :param observation: object - state of the game this node is representing
+        :param to_play: {BLACK, WHITE} - player to play in this state
         """
         self.observation = observation
+        self.to_play = to_play
         self.value = 0
         self.value_sum = 0
         self.visit_count = 0
         self.children = dict()
 
     def __eq__(self, other):
-        return self.observation == other.observation
+        return self.observation == other.observation and self.to_play == other.to_play
 
     def __hash__(self):
-        return hash(self.observation)
+        return hash((self.observation, self.to_play))
 
 
 # TODO check if those are the correct papers
@@ -279,7 +281,7 @@ class MonteCarloTree(Strategy):
         player = self._env.to_play
 
         # Initialize tree
-        root = MonteCarloTreeNode(observation)
+        root = MonteCarloTreeNode(observation, player)
         root.visit_count += 1
 
         # Iterate the algorithm max_iter times
@@ -317,8 +319,14 @@ class MonteCarloTree(Strategy):
                 reward = self._simulate(env) * player
 
             # Backpropagation phase
-            for node in reversed(history):
-                self._backpropagate(node, reward)
+            # Who played the move that lead to that node
+            to_play = player
+            for node in history:
+                # OWNER W W B B
+                # TURN  W B W B
+                #       + - - +
+                self._backpropagate(node, reward if to_play == player else -reward)
+                to_play = node.to_play
 
         # Finally choose the best action at the root according to the policy
         actions = self._env.legal_actions()
@@ -329,7 +337,7 @@ class MonteCarloTree(Strategy):
                 children.append((action, root.children[observation]))
 
         # TODO remove
-        # print("\n".join(str((c.observation, c.visit_count)) for _, c in children))
+        # print("\n".join(str((c.observation, c.visit_count, c.value)) for _, c in children))
         return max(children, key=lambda act_node: self._best_node_policy(act_node[1]))[0]
 
     def _select(self, env, root):
@@ -347,17 +355,22 @@ class MonteCarloTree(Strategy):
         legal_actions = env.legal_actions()
         observations = []
         actions = []
+        to_play = []
         # Filter non visited states
         for action in legal_actions:
-            observation, _, _, _ = env.step(action, fake=True)
+            # We need to take the step so we can now whose turn is now
+            env_ = copy.deepcopy(env)
+            observation, _, _, _ = env_.step(action)
             if observation not in root.children:
                 observations.append(observation)
                 actions.append(action)
+                to_play.append(env_.to_play)
         # Select the child (and the action)
         index = self._expansion_policy(observations, actions)
         observation = observations[index]
         action = actions[index]
-        return MonteCarloTreeNode(observation), action
+        turn = to_play[index]
+        return MonteCarloTreeNode(observation, turn), action
 
     def _simulate(self, env):
         winner = env.winner()
@@ -373,7 +386,6 @@ class MonteCarloTree(Strategy):
             _, reward, done, _ = env.step(action)
         return reward
 
-    # TODO check if it matters whose turn is in a node
     def _backpropagate(self, node, reward):
         # Use reward in [0, 1], where loss=0, draw=.5, win=1
         reward = (reward + 1) / 2
@@ -427,7 +439,7 @@ def uct(c):
         argmax_k {v(k) + C * sqrt( Log(n(N)) / n(k) )},
     where N is the parent node, k is in children(N) and C is a constant (typically sqrt(2)).
     :param c: float - exploration constant C
-    :return: function (MonteCarloTreeNode, [MonteCarloTreeNode]) -> MonteCarloTreeNode - the actual UCT function
+    :return: function (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int - the actual UCT function
     """
 
     def uctc(root, children):

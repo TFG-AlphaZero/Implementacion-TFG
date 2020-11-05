@@ -2,7 +2,7 @@ import numpy as np
 from gym.spaces import Discrete, Box
 
 from tfg.games import GameEnv, WHITE, BLACK
-from tfg.strategies import Minimax, MonteCarloTree, uct
+from tfg.strategies import Minimax, MonteCarloTree
 from tfg.util import play
 
 
@@ -108,10 +108,17 @@ class TicTacToeObservation:
 
 if __name__ == '__main__':
     game = TicTacToe()
-    # uct(3) seems to work a bit better than uct(sqrt(2))
-    s1 = MonteCarloTree(game, 1000, selection_policy=uct(3))
+    s1 = MonteCarloTree(game, 1000)
     s2 = Minimax(game)
-    p1_wins, draws, p2_wins = play(game, s1, s2)
-    print(f"Monte Carlo wins: {p1_wins}")
-    print(f"Minimax wins: {p2_wins}")
-    print(f"Draws: {draws}")
+
+    p1_wins, draws, p2_wins = play(game, s1, s2, games=10)
+    print("Monte Carlo as WHITE")
+    print(f" * Monte Carlo wins: {p1_wins}")
+    print(f" * Minimax wins: {p2_wins}")
+    print(f" * Draws: {draws}")
+
+    p1_wins, draws, p2_wins = play(game, s2, s1, games=10)
+    print("Monte Carlo as BLACK")
+    print(f" * Monte Carlo wins: {p2_wins}")
+    print(f" * Minimax wins: {p1_wins}")
+    print(f" * Draws: {draws}")

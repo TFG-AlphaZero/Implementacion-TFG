@@ -1,3 +1,6 @@
+from tfg.strategies import HumanStrategy
+
+
 def play(game, s1, s2, games=1, render=False, print_results=False):
     def print_winner():
         if not print_results:
