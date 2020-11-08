@@ -4,54 +4,62 @@ import gym
 import numpy as np
 
 WHITE = 1
+"""Constant representing first player in a two players game."""
 BLACK = -1
+"""Constant representing second player in a two players game."""
 
 
 class GameEnv(gym.Env, abc.ABC):
-    """
-    Base class for two player games. Extends gym's Env base class to add the capacity to know the result of a certain
-    step without actually taking it. It also adds methods to know all the legal actions in the current state,
-    a subset of the action space, and to know the winner in the current state.
+    """Base class for two player games.
+
+    Extends gym's Env base class to add the capacity to know the result of a certain step without actually taking it.
+    It also adds methods to know all the legal actions in the current state, a subset of the action space,
+    and to know the winner in the current state.
+
     """
     metadata = {'render.modes': ['human']}
     reward_range = (-1, 1)
 
     @property
     def to_play(self):
-        """
-        Player to play in the current state. WHITE=1, BLACK=-1.
-        """
+        """int: Player to play in the current state. WHITE=1, BLACK=-1."""
         raise NotImplementedError
 
     def step(self, action, fake=False):
-        """
-        Overriding step in gym.Env to allow taking "fake steps" where the environment (the game) doesn't get it state
+        """Overriding step in gym.Env to allow taking "fake steps" where the environment (the game) doesn't get it state
         updated.
-        :param action: object - an action provided by the player
-        :param fake: bool - whether to update the state or only return the result (default: False)
-        :return: same as gym.Env.step
+
+        Args:
+            action (object): An action provided by the player.
+            fake (:obj:`bool`, optional): Whether to update the state or only return the result. Defaults to False.
+
+        Returns:
+            same as gym.Env.step
+
         """
         raise NotImplementedError
 
     def legal_actions(self):
-        """
-        Returns a list of all legal actions in the current state.
-        :return: list - list of all legal actions, a subset of action_space
+        """Returns a list of all legal actions in the current state.
+
+        Returns:
+            list of object: List of all legal actions, a subset of action_space.
+
         """
         raise NotImplementedError
 
     def winner(self):
-        """
-        Returns the player that has won the game in the current state. Returns None if the state is not terminal.
-        :return: {-1, 0, 1, None} - the player that has won the game: WHITE=1, BLACK=-1, DRAW=0 and None if the game
-        has not ended yet
+        """Returns the player that has won the game in the current state. Returns None if the state is not terminal.
+
+        Returns:
+            int or None: Player that has won the game: WHITE=1, BLACK=-1, DRAW=0 and None if the game has not ended yet.
+
         """
         raise NotImplementedError
 
 
 class DummyGame(GameEnv):
-    """
-    Dummy game with a low state space to test GameEnv.
+    """Dummy game with a low state space to test GameEnv.
 
     The game starts with n numbers, from 1 to n, randomly sorted. In every turn a player takes one of the numbers,
     the left-most or the right-most and retires it from the board. The score of each player is the sum of all the
@@ -76,6 +84,7 @@ class DummyGame(GameEnv):
     Score: 6-4. Player 1 won.
 
     Actions: LEFT=0, RIGHT=1.
+
     """
     board = None
     left = None
@@ -85,7 +94,10 @@ class DummyGame(GameEnv):
 
     def __init__(self, n):
         """
-        :param n: int - maximum number in the game
+
+        Args:
+            n (:obj:`int`): Maximum number in the game.
+
         """
         self.board = self._create_board(n)
         # 0 = left, 1 = right
@@ -102,16 +114,20 @@ class DummyGame(GameEnv):
         return self._to_play
 
     def is_last_move(self):
-        """
-        Determines if the next move will be the last move of the game (i.e. there is only one number left).
-        :return: True if the next move will be the last move of the game, False otherwise
+        """Determines if the next move will be the last move of the game (i.e. there is only one number left).
+
+        Returns:
+            bool: True if the next move will be the last move of the game, False otherwise.
+
         """
         return self.left == self.right - 1
 
     def done(self):
-        """
-        Returns if the game has ended or not.
-        :return: True if the game has already ended (i.e. there are no numbers left), False otherwise
+        """Returns if the game has ended or not.
+
+        Returns:
+            bool: True if the game has already ended (i.e. there are no numbers left), False otherwise.
+
         """
         return self.left >= self.right
 
@@ -192,9 +208,7 @@ class DummyGame(GameEnv):
 
 
 class DummyGameObservation:
-    """
-    Wrapper for DummyGame's observations so they can be hashable.
-    """
+    """Wrapper for DummyGame's observations so they can be hashable."""
 
     def __init__(self, board, scores):
         self._data = (board, scores)

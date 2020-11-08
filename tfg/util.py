@@ -5,7 +5,26 @@ from joblib import Parallel, delayed
 from tfg.strategies import HumanStrategy
 
 
-def play(game, s1, s2, games=1, max_workers=None, render=False, print_results=False):
+def play(game, white, black, games=1, max_workers=None, render=False, print_results=False):
+    """Play n games of the provided game where players are using strategies white and black, respectively.
+
+    Args:
+        game (tfg.games.GameEnv): Game to be played.
+        white (tfg.strategies.Strategy): Strategy for WHITE player.
+        black (tfg.strategies.Strategy): Strategy for BLACK player.
+        games (:obj:`int`, optional): Number of games that will be played. If max_workers is None they will be played
+            iteratively. Otherwise, games / max_workers will be played iteratively by each worker. Defaults to 1.
+        max_workers (:obj:`int`, optional): If set, maximum number of processes that will be launched to play
+            simultaneously. Not recommended if one of the players is tfg.strategies.HumanStrategy. Defaults to None.
+        render (:obj:`bool`, optional): Whether to render the game after every turn or not. Defaults to False.
+        print_results (:obj:`bool`, optional): Whether to print the results at the end of each game. Defaults to False.
+
+    Returns:
+        (:obj;`int`, :obj;`int`, :obj;`int`): Cumulative results of all games in the format (WHITE wins, draws,
+            BLACK wins).
+
+    """
+
     def play_(g):
         def print_winner():
             if not print_results:
@@ -24,25 +43,25 @@ def play(game, s1, s2, games=1, max_workers=None, render=False, print_results=Fa
         results = [0, 0, 0]
         for _ in range(g):
             observation = game.reset()
-            if render and not isinstance(s1, HumanStrategy):
+            if render and not isinstance(white, HumanStrategy):
                 game.render()
 
             while True:
-                action = s1.move(observation)
+                action = white.move(observation)
                 observation, _, done, _ = game.step(action)
                 if done:
                     results[get_winner_index()] += 1
                     print_winner()
                     break
-                elif render and not isinstance(s2, HumanStrategy):
+                elif render and not isinstance(black, HumanStrategy):
                     game.render()
-                action = s2.move(observation)
+                action = black.move(observation)
                 observation, _, done, _ = game.step(action)
                 if done:
                     results[get_winner_index()] += 1
                     print_winner()
                     break
-                elif render and not isinstance(s1, HumanStrategy):
+                elif render and not isinstance(white, HumanStrategy):
                     game.render()
 
         return tuple(results)

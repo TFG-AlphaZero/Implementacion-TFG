@@ -10,38 +10,48 @@ import tfg.games
 
 
 class Strategy(abc.ABC):
-    """
-    Interface for game policies. It implements the move method which maps observations to an action.
-    """
+    """Interface for game policies. It implements the move method which maps observations to an action."""
 
     def move(self, observation):
-        """
-        Returns the action that the agent should taken given the current observation. It acts like the policy function.
-        :param observation: object - current state of the game
-        :return: object - action that the agent should take
+        """Returns the action that the agent should taken given the current observation. It acts like the policy
+        function.
+
+        Args:
+            observation (object): Current state of the game.
+
+        Returns:
+            object: Action that the agent should take.
+
         """
         raise NotImplementedError
 
 
 class HumanStrategy(Strategy):
-    """
-    Implementation of Strategy so that humans can play a game.
-    """
+    """Implementation of Strategy so that humans can play a game."""
 
     def __init__(self, env, name='PLAYER'):
         """
-        :param env: GameEnv - game this strategy is for
-        :param name: String (optional) - name that will be printed for this player (default 'PLAYER')
+
+        Args:
+            env (tfg.games.GameEnv): Game this strategy is for.
+            name (object): Name that will be printed for this player (default 'PLAYER').
+
         """
         self.env = env
         self.name = str(name)
 
     def move(self, observation=None):
-        """
-        Renders the game and asks the player to input a move.
-        :param observation: ignored as the player will see the current state
-        :return: object - action chosen by the human player
-        :raise: ValueError if the action is not a valid action in the action space of the environment (the game)
+        """Renders the game and asks the player to input a move.
+
+        Args:
+            observation (object): Ignored as the player will see the current state.
+
+        Returns:
+            object: Action chosen by the human player.
+
+        Raises:
+            ValueError: If the action is not a valid action in the action space of the environment (the game).
+
         """
         self.env.render(mode='human')
         legal_actions = self.env.legal_actions()
@@ -61,11 +71,37 @@ class HumanStrategy(Strategy):
         return action
 
 
-# TODO docs
 class Minimax(Strategy):
+    """Game strategy (policy) implementing Minimax algorithm and AlphaBeta prune.
+
+    Minimax explores the whole game tree and tries to maximize each player's reward. That is, for WHITE, also called
+    the max player, the algorithm will try to maximize its payoff while trying to minimize it for BLACK,
+    the min player. As a remainder, positive reward means WHITE is winning, while negative means BLACK is winning.
+
+    AlphaBeta prune is an improvement of Minimax algorithm, where parts of the tree where we know we can't get a
+    better value get pruned directly.
+
+    """
 
     def __init__(self, env, max_depth=None, heuristic=None, alpha_beta=True,
                  ordering=lambda x: random.random()):
+        """
+
+        Args:
+            env (tfg.games.GameEnv): Game this strategy is for.
+            max_depth (:obj:`int`, optional): Maximum depth the tree is allowed to grow. If None it will grow until a
+                leaf node is reached. If set, heuristic must be given. Defaults to None.
+            heuristic (function, optional): If max_depth is not None, heuristic function
+                (observation: object, to_play: int) -> int that will be called to estimate the value of a leaf node.
+                This value will be positive if WHITE is more likely to win, negative if BLACK is the one who is
+                winning and 0 if the game is estimated to end in a draw. It is recommended that the return value of
+                this function is between -1 and 1.
+            alpha_beta (:obj:`bool`, optional): Determines whether or not to use AlphaBeta prune. Defaults to True.
+            ordering (function, optional): Function (action: object) -> number that will be used as key function to sort
+            actions before traversing them. Lower numbers go first. If set to None, actions will be traversed with
+            the same order as they were returned by env.legal_actions() function. Default random.
+
+        """
 
         if max_depth is not None and heuristic is None:
             raise ValueError("max_depth was given but heuristic wasn't")
@@ -76,7 +112,22 @@ class Minimax(Strategy):
         self.alpha_beta = alpha_beta
         self.ordering = ordering
 
+    @property
+    def env(self):
+        """tfg.games.GameEnv: Game this strategy is for."""
+        return self._env
+
     def move(self, observation):
+        """Implementation of the Minimax algorithm.
+
+        Args:
+            observation (object): Current state of the game (must be the same as the one in self.env or the algorithm
+            might not work).
+
+        Returns:
+            object: Action that the agent should take.
+
+        """
         player = self._env.to_play
         action, _ = self._minimax(self._env, observation, player) if not self.alpha_beta else \
             self._alpha_beta(self._env, observation, player)
@@ -167,14 +218,15 @@ class Minimax(Strategy):
 
 
 class MonteCarloTreeNode:
-    """
-    Node used during the Monte Carlo Tree Search algorithm.
-    """
+    """Node used during the Monte Carlo Tree Search algorithm."""
 
     def __init__(self, observation, to_play):
         """
-        :param observation: object - state of the game this node is representing
-        :param to_play: {BLACK, WHITE} - player to play in this state
+
+        Args:
+            observation (object): State of the game this node is representing.
+            to_play (:obj:`int`): Player to play in this state, either BLACK or WHITE.
+
         """
         self.observation = observation
         self.to_play = to_play
@@ -192,9 +244,9 @@ class MonteCarloTreeNode:
 
 # TODO check if those are the correct papers
 class MonteCarloTree(Strategy):
-    """
-    Game strategy (policy) implementing the Monte Carlo Tree Search algorithm (Coulom, 2006; Kocsis and Szepesvári,
-    2006; Chaslot et al., 2006a).
+    """Game strategy (policy) implementing Monte Carlo Tree Search algorithm
+
+    This algorithm was first described in Coulom, 2006; Kocsis and Szepesvári, 2006; and Chaslot et al., 2006a.
 
     Essentially, for every move of the player the algorithm will run max_iter iterations of the following:
     1. Selection:       starting in the root traverse down the tree using a given selection_policy until it
@@ -206,37 +258,40 @@ class MonteCarloTree(Strategy):
 
     After all that max_iter iterations it selects an action that results in the node that maximizes the value
     returned by best_node_policy.
+
     """
 
     def __init__(self, env, max_iter, selection_policy=None, expansion_policy=None, simulation_policy=None,
                  backpropagation_policy=None, best_node_policy=None):
         """
-        :param env: GameEnv - game this strategy is for
-        :param max_iter: int - total number of iterations of the algorithm for each move
-        :param selection_policy: str/function-like - function that will be used to select a child during selection phase
-                                 Can be either a function (root: MonteCarloTreeNode, children: [MonteCarloTreeNode]) ->
-                                 selected_index: int, or a string representing the function to apply, one of the
-                                 following: {'random', 'uct' (UCT: C=sqrt(2))}. Default 'uct'.
-        :param expansion_policy: str/function-like - function that will be used to select the expanded node during
-                                 expansion phase
-                                 Can be either a function (observations: [object], actions: [object)]) ->
-                                 selected_index: int, or a string representing the function to apply, one of the
-                                 following: {'random'}. Default 'random'.
-        :param simulation_policy: str/function-like - function that will be used to select the move that will be
-                                  played in each state of the self-play phase
-                                  Can be either a function (actions: [object], step_results: [(observation, reward,
-                                  done, info)]) -> selected_index: int, or a string  representing the  function to
-                                  apply, one of the following: {'random'}. Default 'random'.
-        :param backpropagation_policy: str/function-like - function that will be used to update the value of each
-                                       node during backpropagation
-                                       Can be either a function (node: MonteCarloTreeNode) -> value: number, or a string
-                                       representing the function to apply, one of the following: {'mean' (value_sum /
-                                       visit_count)}. Default 'mean'.
-        :param best_node_policy: str/function-like - function that will be used to select the returned action at the
-                                 end of the algorithm
-                                 Can be either a function (node: MonteCarloTreeNode) -> value: number (node with
-                                 highest value will be chosen), or a string representing the function to apply,
-                                 one of the following: {'count' (visit_count)}. Default 'count'.
+
+        Args:
+            env (tfg.games.GameEnv): Game this strategy is for.
+            max_iter (:obj:`int`): Total number of iterations of the algorithm for each move.
+            selection_policy (function or :obj:`str`, optional): Function that will be used to select a child during
+                selection phase Can be either a function (root: MonteCarloTreeNode, children: [MonteCarloTreeNode]) ->
+                selected_index: int, or a string representing the function to apply, one of the following:
+                {'random', 'uct'}, where 'uct' uses C=sqrt(2). Defaults to 'uct'.
+            expansion_policy (function or :obj:`str`, optional): Function that will be used to select the expanded
+                node during expansion phase. Can be either a function (observations: [object], actions: [object)]) ->
+                selected_index: int, or a string representing the function to apply, one of the following: {'random'}.
+                Defaults to 'random'.
+            simulation_policy (function or :obj:`str`, optional): Function that will be used to select the move that
+                will be played in each state of the self-play phase. Can be either a function
+                (actions: [object], step_results: [(observation, reward, done, info)]) -> selected_index: int,
+                or a string  representing the  function to apply, one of the following: {'random'}. Defaults to
+                'random'.
+            backpropagation_policy (function or :obj:`str`, optional): Function that will be used to update the value
+                of each node during backpropagation. Can be either a function (node: MonteCarloTreeNode) ->
+                value: number, or a string representing the function to apply, one of the following: {'mean'},
+                where 'mean' is
+                computed over visit count. Defaults to 'mean'.
+            best_node_policy (function or :obj:`str`, optional): Function that will be used to select the returned
+                action at the end of the algorithm. Can be either a function (node: MonteCarloTreeNode) ->
+                value: number (node with highest value will be chosen), or a string representing the function to
+                apply, one of the following: {'count'}, where 'count' returns the visit count of the node. Defaults
+                to 'count'.
+
         """
 
         self._env = env
@@ -264,14 +319,19 @@ class MonteCarloTree(Strategy):
 
     @property
     def env(self):
+        """tfg.games.GameEnv: Game this strategy is for."""
         return self._env
 
     def move(self, observation):
-        """
-        Implementation of the MCTS algorithm.
-        :param observation: object - current state of the game (must be the same as the one in self.env or the
-                            algorithm might not work)
-        :return: object - action that the agent should take
+        """Implementation of the MCTS algorithm.
+
+        Args:
+            observation (object): Current state of the game (must be the same as the one in self.env or the algorithm
+                might not work).
+
+        Returns:
+            object: Action that the agent should take.
+
         """
 
         # TODO Two actions may lead to the same observation !!
@@ -434,16 +494,22 @@ class MonteCarloTree(Strategy):
 
 
 class UCT:
-    """
-    Class representing the UCT formula to select a node in the selection phase of the MCTS algorithm:
+    """Class representing the UCT formula to select a node in the selection phase of the MCTS algorithm.
+
+    The node wll be selected using the following formula:
         argmax_k {v(k) + C * sqrt( Log(n(N)) / n(k) )},
     where N is the parent node, k is in children(N) and C is a constant (typically sqrt(2)).
-    It is a functional class : (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int
+
+    It is a functional class : (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int.
+
     """
 
     def __init__(self, c):
         """
-        :param c: float - exploration constant C
+
+        Args:
+            c (float): Exploration constant C.
+
         """
         self.c = c
 
