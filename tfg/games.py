@@ -12,8 +12,9 @@ BLACK = -1
 class GameEnv(gym.Env, abc.ABC):
     """Base class for two player games.
 
-    Extends gym's Env base class to add the capacity to know the result of a certain step without actually taking it.
-    It also adds methods to know all the legal actions in the current state, a subset of the action space,
+    Extends gym's Env base class to add the capacity to know the result of a
+    certain step without actually taking it. It also adds methods to know all
+    the legal actions in the current state, a subset of the action space,
     and to know the winner in the current state.
 
     """
@@ -26,12 +27,13 @@ class GameEnv(gym.Env, abc.ABC):
         raise NotImplementedError
 
     def step(self, action, fake=False):
-        """Overriding step in gym.Env to allow taking "fake steps" where the environment (the game) doesn't get it state
-        updated.
+        """Overriding step in gym.Env to allow taking "fake steps" where the
+        environment (the game) doesn't get it state updated.
 
         Args:
             action (object): An action provided by the player.
-            fake (:obj:`bool`, optional): Whether to update the state or only return the result. Defaults to False.
+            fake (:obj:`bool`, optional): Whether to update the state or only
+                return the result. Defaults to False.
 
         Returns:
             same as gym.Env.step
@@ -49,10 +51,12 @@ class GameEnv(gym.Env, abc.ABC):
         raise NotImplementedError
 
     def winner(self):
-        """Returns the player that has won the game in the current state. Returns None if the state is not terminal.
+        """Returns the player that has won the game in the current state.
+        Returns None if the state is not terminal.
 
         Returns:
-            int or None: Player that has won the game: WHITE=1, BLACK=-1, DRAW=0 and None if the game has not ended yet.
+            int or None: Player that has won the game: WHITE=1, BLACK=-1, DRAW=0
+                and None if the game has not ended yet.
 
         """
         raise NotImplementedError
@@ -61,8 +65,9 @@ class GameEnv(gym.Env, abc.ABC):
 class DummyGame(GameEnv):
     """Dummy game with a low state space to test GameEnv.
 
-    The game starts with n numbers, from 1 to n, randomly sorted. In every turn a player takes one of the numbers,
-    the left-most or the right-most and retires it from the board. The score of each player is the sum of all the
+    The game starts with n numbers, from 1 to n, randomly sorted. In every turn
+    a player takes one of the numbers, the left-most or the right-most and
+    retires it from the board. The score of each player is the sum of all the
     numbers it has taken and the winner is the player with highest score.
 
     Example with n=4.
@@ -114,10 +119,12 @@ class DummyGame(GameEnv):
         return self._to_play
 
     def is_last_move(self):
-        """Determines if the next move will be the last move of the game (i.e. there is only one number left).
+        """Determines if the next move will be the last move of the game
+        (i.e. there is only one number left).
 
         Returns:
-            bool: True if the next move will be the last move of the game, False otherwise.
+            bool: True if the next move will be the last move of the game,
+                False otherwise.
 
         """
         return self.left == self.right - 1
@@ -126,7 +133,8 @@ class DummyGame(GameEnv):
         """Returns if the game has ended or not.
 
         Returns:
-            bool: True if the game has already ended (i.e. there are no numbers left), False otherwise.
+            bool: True if the game has already ended (i.e. there are no numbers
+                left), False otherwise.
 
         """
         return self.left >= self.right
@@ -156,13 +164,18 @@ class DummyGame(GameEnv):
             score = board[right]
             board[right] = 0
         else:
-            raise ValueError(f"action must be 0 (left) or 1 (right) - found {action}")
+            raise ValueError(
+                f"action must be 0 (left) or 1 (right) - found {action}"
+            )
         scores[self._to_play] += score
 
         if fake:
             # If it was the last move then it's done
             done = self.is_last_move()
-            reward = 0 if not done else 1 if scores[0] > scores[1] else -1 if scores[1] > scores[0] else 0
+            reward = (0 if not done else
+                      1 if scores[0] > scores[1] else
+                      -1 if scores[1] > scores[0] else
+                      0)
             return DummyGameObservation(board, scores), reward, done, {}
 
         # Update state
@@ -172,7 +185,8 @@ class DummyGame(GameEnv):
         self.right = right
         self._to_play = (self._to_play + 1) % 2
         reward = 0 if not self.done() else self.winner()
-        return DummyGameObservation(self.board, self.scores), reward, self.done(), {}
+        observation = DummyGameObservation(self.board, self.scores)
+        return observation, reward, self.done(), {}
 
     def reset(self):
         n = len(self.board)
@@ -217,7 +231,8 @@ class DummyGameObservation:
         return self._data.__getitem__(item)
 
     def __eq__(self, other):
-        return (self._data[0] == other._data[0]).all() and (self._data[1] == other._data[1]).all()
+        return ((self._data[0] == other._data[0]).all() and
+                (self._data[1] == other._data[1]).all())
 
     def __hash__(self):
         return hash((tuple(self._data[0]), tuple(self._data[1])))

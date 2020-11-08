@@ -53,7 +53,9 @@ class TicTacToe(GameEnv):
     def render(self, mode='human'):
         mapping = {-1: 'O', 0: ' ', 1: 'X'}
         tokens = [[mapping[cell] for cell in row] for row in self.board]
-        print("\n-+-+-\n".join(['|'.join([token for token in row]) for row in tokens]))
+        print("\n-+-+-\n".join(
+            ['|'.join([token for token in row]) for row in tokens]
+        ))
 
     @staticmethod
     def _parse_action(action):
@@ -64,7 +66,8 @@ class TicTacToe(GameEnv):
     def _check_action(self, action):
         legal_actions = self.legal_actions()
         if action not in legal_actions:
-            raise ValueError(f"found an illegal action {action}; legal actions are {legal_actions}")
+            raise ValueError(f"found an illegal action {action}; "
+                             f"legal actions are {legal_actions}")
 
     @staticmethod
     def _check_board(board, i, j):
