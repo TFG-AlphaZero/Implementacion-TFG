@@ -113,7 +113,7 @@ class TicTacToeObservation:
 
 if __name__ == '__main__':
     game = TicTacToe()
-    s1 = MonteCarloTree(game, 1000)
+    s1 = MonteCarloTree(game, max_iter=10_000, max_time=5.)
     s2 = Minimax(game)
 
     now = time.time()

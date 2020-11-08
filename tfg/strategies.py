@@ -2,11 +2,23 @@ import abc
 import copy
 import random
 import re
+import time
 
 import gym
 import numpy as np
+import scipy.special as sp
 
 import tfg.games
+
+
+def argmax(values, key=None):
+    key_ = (lambda i: values[i]) if key is None else (lambda i: key(values[i]))
+    return max(range(len(values)), key=key_)
+
+
+def argmin(values, key=None):
+    key_ = (lambda i: values[i]) if key is None else (lambda i: key(values[i]))
+    return min(range(len(values)), key=key_)
 
 
 class Strategy(abc.ABC):
@@ -255,6 +267,7 @@ class MonteCarloTreeNode:
         self.observation = observation
         self.to_play = to_play
         self.value = 0
+        self.value_history = list()
         self.value_sum = 0
         self.visit_count = 0
         self.children = dict()
@@ -291,7 +304,7 @@ class MonteCarloTree(Strategy):
 
     """
 
-    def __init__(self, env, max_iter,
+    def __init__(self, env, max_iter=None, max_time=None,
                  selection_policy=None,
                  expansion_policy=None,
                  simulation_policy=None,
@@ -301,15 +314,24 @@ class MonteCarloTree(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_iter (:obj:`int`): Total number of iterations of the algorithm
-                for each move.
+            max_iter (:obj:`int`, optioal): Total number of iterations of the
+                algorithm for each move. If not set, the algorithm will run
+                until there is no time left. Either max_iter or max_time (or
+                both) must be set.
+            max_time (:obj:`float`, optioal): Maximum amount of seconds the
+                algorithm will be running for each move. If not set, the
+                algorithm will run exactly max_iter iterations. Time spent
+                during selection of the final move will not be taken into
+                account. Either max_iter or max_time (or both) must be set.
             selection_policy (function or :obj:`str`, optional): Function
                 that will be used to select a child during selection phase Can
                 be either a function
                     (root: MonteCarloTreeNode,
                     children: [MonteCarloTreeNode]) -> selected_index: int,
                 or a string representing the function to apply, one of the
-                following: {'random', 'uct'}, where 'uct' uses C=sqrt(2).
+                following: {'random', 'uct', 'omc', 'pbbm'}, where 'uct' is
+                tfg.strategies.UCT with C=sqrt(2), 'omc' is
+                tfg.strategies.OMC and 'pbbm' is tfg.strategies.PBBM.
                 Defaults to 'uct'.
             expansion_policy (function or :obj:`str`, optional): Function that
                 will be used to select the expanded node during expansion
@@ -339,10 +361,16 @@ class MonteCarloTree(Strategy):
                     (node: MonteCarloTreeNode) -> value: number
                 (node with highest value will be chosen), or a string
                 representing the function to apply, one of the following:
-                {'count'}, where 'count' returns the visit count of the node.
-                Defaults to 'count'.
+                {'robust', 'max', 'secure'}, where 'robust' returns the visit
+                count of the node, 'max' returns its value (computed by
+                backpropagation policy) and 'secure' returns the result of
+                the tfg.strategies.SecureChild formula with A=4. Defaults to
+                'robust'.
 
         """
+        if max_iter is None and max_time is None:
+            raise ValueError("at least one of max_iter and max_time "
+                             "must be not None")
 
         if selection_policy is None:
             selection_policy = 'uct'
@@ -357,10 +385,11 @@ class MonteCarloTree(Strategy):
             backpropagation_policy = 'mean'
 
         if best_node_policy is None:
-            best_node_policy = 'count'
+            best_node_policy = 'robust'
 
         self._env = env
         self.max_iter = max_iter
+        self.max_time = max_time
 
         self._selection_policy = (
             self._selection_policy_from_string(selection_policy)
@@ -413,14 +442,27 @@ class MonteCarloTree(Strategy):
         def _fully_expanded(n):
             return len(n.children) == len(env.legal_actions())
 
+        def time_left():
+            result = True
+            if self.max_iter is not None:
+                result &= i < self.max_iter
+            if self.max_time is not None:
+                result &= (current_time - start) + iter_time < self.max_time
+            return result
+
+        start = time.time()
+        current_time = start
+        iter_time = 0
+
         player = self._env.to_play
 
         # Initialize tree
         root = MonteCarloTreeNode(observation, player)
         root.visit_count += 1
 
+        i = 0
         # Iterate the algorithm max_iter times
-        for _ in range(self.max_iter):
+        while time_left():
             # Reset search every iteration
             history = [root]
             env = copy.deepcopy(self._env)
@@ -466,6 +508,10 @@ class MonteCarloTree(Strategy):
                 self._backpropagate(node, r)
                 to_play = node.to_play
 
+            i += 1
+            current_time = time.time()
+            iter_time = (current_time - start) / i
+
         # Finally choose the best action at the root according to the policy
         legal_actions = self._env.legal_actions()
         children = []
@@ -476,8 +522,7 @@ class MonteCarloTree(Strategy):
                 children.append(root.children[observation])
                 actions.append(action)
 
-        index = max(range(len(children)),
-                    key=lambda i: self._best_node_policy(children[i]))
+        index = self._best_node_policy(children)
         return actions[index]
 
     def _select(self, env, root):
@@ -531,6 +576,7 @@ class MonteCarloTree(Strategy):
         # Use reward in [0, 1], where loss=0, draw=.5, win=1
         reward = (reward + 1) / 2
         # First update all basic fields of the node
+        node.value_history.append(reward)
         node.value_sum += reward
         node.visit_count += 1
         # Then update its value
@@ -543,6 +589,10 @@ class MonteCarloTree(Strategy):
             return lambda root, children: np.random.choice(len(children))
         elif string == 'uct':
             return UCT(np.sqrt(2))
+        elif string == 'omc':
+            return OMC()
+        elif string == 'pbbm':
+            return PBBM()
         return None
 
     @staticmethod
@@ -569,13 +619,17 @@ class MonteCarloTree(Strategy):
     @staticmethod
     def _best_node_policy_from_string(string):
         string = string.lower()
-        if string == 'count':
-            return lambda node: node.visit_count
+        if string == 'robust':
+            return lambda nodes: argmax(nodes, key=lambda n: n.visit_count)
+        elif string == 'max':
+            return lambda nodes: argmax(nodes, key=lambda n: n.value)
+        elif string == 'secure':
+            return SecureChild(4)
         return None
 
 
 class UCT:
-    """Class representing the UCT formula.
+    """Class representing the UCT formula (Kocsis and Szepesvári (2006)).
 
     This formula is used during MCTS' selection phase and chooses a node in:
         argmax_k {v(k) + C * sqrt( Log(n(N)) / n(k) )},
@@ -602,3 +656,91 @@ class UCT:
             np.log(root.visit_count) / visits
         )
         return np.argmax(uct_values)
+
+
+class OMC:
+    """Class representing the OMC formula (Chaslot et al. (2006a)).
+
+    This formula is used during MCTS' selection phase and chooses a node in:
+        argmax_k {(n(N) * U(k)) / (n(k) * sum:{i != k} U(i))},
+    where N is the parent node, k is in children(N) and U is the urgency
+    function of a node:
+        erfc((v0 - v(k)) / (sqrt(2) * std(k))),
+    where erfc is the complementary error function and v0 is the highest value
+    of all children.
+
+    It is a functional class: (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int.
+
+    """
+
+    # TODO fix division by zero
+    def __call__(self, root, children):
+        values = np.array([child.value for child in children])
+        visits = np.array([child.visit_count for child in children])
+        # TODO is this correct?
+        sigma = np.array([np.std(child.value_history) for child in children])
+        sigma[sigma == 0.] = np.finfo('float64').eps
+        best_value = values.max()
+        urgencies = sp.erfc((best_value - values) / (np.sqrt(2) * sigma))
+        urg_sum = urgencies.sum()
+        return np.argmax((root.visit_count * urgencies) /
+                         (visits * (urg_sum - urgencies)))
+
+
+class PBBM:
+    """Class representing the PBBM formula (Coulom (2006)).
+
+    This formula is used during MCTS' selection phase and chooses a node in:
+        argmax_k {(n(N) * U(k)) / (n(k) * sum:{i != k} U(i))},
+    where N is the parent node, k is in children(N) and U is the urgency
+    function of a node:
+        exp(-2.4 * (v0 - v(k)) / (sqrt(2 * (std0^2 + std(k)^2))))
+    where v0 is the highest value of all children and std0 the standard
+    deviation of the child with the highest value.
+
+    It is a functional class: (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int.
+
+    """
+
+    # TODO fix division by zero
+    def __call__(self, root, children):
+        values = np.array([child.value for child in children])
+        visits = np.array([child.visit_count for child in children])
+        sigma = np.array([np.std(child.value_history) for child in children])
+        sigma[sigma == 0.] = np.finfo('float64').eps
+        best_node = np.argmax(values)
+        best_value = values[best_node]
+        best_sigma = sigma[best_node]
+        urgencies = np.exp(-2.4 * (best_value - values) /
+                           (np.sqrt(2 * (best_sigma + sigma ** 2))))
+        urg_sum = urgencies.sum()
+        return np.argmax((root.visit_count * urgencies) /
+                         (visits * (urg_sum - urgencies)))
+
+
+class SecureChild:
+    """Class representing the secure child formula.
+
+    It is used at the end of MCTS algorithm to select the returned
+    action. Selects the child which maximises a lower confidence bound:
+        argmax_k {v(k) + A / n(k)},
+    where k is in a set of nodes and A is a constant.
+
+    It is a functional class: ([MonteCarloTreeNode]) -> int.
+
+    """
+
+    def __init__(self, a):
+        """
+
+        Args:
+            a (float): Confidence bound constant A.
+
+        """
+        self.a = a
+
+    def __call__(self, nodes):
+        def f(node):
+            return node.value + self.a / np.sqrt(node.visit_count)
+
+        return argmax(nodes, key=lambda node: f(node))
