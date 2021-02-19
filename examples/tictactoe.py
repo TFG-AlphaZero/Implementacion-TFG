@@ -34,15 +34,17 @@ class TicTacToe(GameEnv):
         board = self.board.copy()
         board[i, j] = self._to_play
         reward, done = self._check_board(board, i, j)
+        to_play = -self._to_play
+        info = {'to_play': to_play}
 
         if fake:
-            return TicTacToeObservation(board), reward, done, {}
+            return board, reward, done, info
 
         self.board = board
         if done:
             self._winner = reward
-        self._to_play *= -1
-        return TicTacToeObservation(self.board), reward, done, {}
+        self._to_play = to_play
+        return self.board.copy(), reward, done, info
 
     def reset(self):
         self.board = np.zeros(shape=(3, 3))
@@ -88,27 +90,6 @@ class TicTacToe(GameEnv):
                 return possible_winner, True
         is_draw = board.flatten().all()
         return 0, is_draw
-
-
-class TicTacToeObservation:
-
-    def __init__(self, observation):
-        self.board = observation
-
-    def __getitem__(self, item):
-        return self.board.__getitem__(item)
-
-    def __eq__(self, other):
-        return (self.board == other.board).all()
-
-    def __hash__(self):
-        return hash((tuple(self.board.flatten())))
-
-    def __str__(self):
-        return str(self.board)
-
-    def __repr__(self):
-        return str(self)
 
 
 if __name__ == '__main__':
