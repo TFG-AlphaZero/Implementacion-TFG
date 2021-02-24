@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
+
 from functools import reduce
 
 from joblib import Parallel, delayed

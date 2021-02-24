@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
+
 import numpy as np
 from gym.spaces import Discrete, Box
 
