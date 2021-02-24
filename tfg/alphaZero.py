@@ -112,8 +112,8 @@ class ProbVisitCount:
 
     When playing a real game with an opponent, the temperature is set to t -> 0 all the time.
     
-    It is a functional class: ([MonteCarloTreeNode]) -> ([int], int)
-    Stores pi(a|s) and the index which maximixes it
+    It is a functional class: ([MonteCarloTreeNode]) -> [int]
+    which returns pi(a|s) for each action
     """
 
     def __init__(self, t_equals_one):
@@ -129,11 +129,16 @@ class ProbVisitCount:
         self.counter = t_equals_one
 
     def __call__(self, nodes):
-        t = 1 if self.counter > 0 else 0.001 #Mirar si es mejor usar una constante a pelo o epsilon!
+        t = 1 if self.counter > 0 else 0.01 #Peta overflow si lo hago mas pequeno.
         self.counter = max(0, self.counter - 1)
 
-        raise NotImplementedError
+        fun1 = lambda i : i.visit_count**(1/t)
+        fun2 = np.vectorize(fun1)
+
+        sum = np.sum(fun2(nodes))
+        pi = [fun1(node) / sum for node in nodes]
+
+        return pi #Mirar si es valido que devuelva esto
     
     def reset(self):
         self.counter = self.t_equals_one
-
