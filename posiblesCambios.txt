@@ -1,0 +1,2 @@
+Cambios propuestos:
+argmax: Eliminar nuestro propio argmax por  np.argmax(np.vectorize(lambda i : ...)(array))
