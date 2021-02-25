@@ -13,7 +13,5 @@ from examples.tictactoe import TicTacToe
 
 game = TicTacToe()
 alphaZero = AlphaZero(game, self_play_times=1)
-buffer = alphaZero.train()
-print(buffer)
 
 print("Que te jodan")
