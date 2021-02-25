@@ -121,7 +121,7 @@ class ConnectN(GameEnv):
 
 
 if __name__ == '__main__':
-    game = ConnectN(n=5, rows=10, cols=5)
+    game = ConnectN()
     s1 = HumanStrategy(game)
-    s2 = MonteCarloTree(game, max_iter=1, selection_policy='uct')
+    s2 = MonteCarloTree(game, max_iter=100, reset_tree=False)
     play(game, s1, s2, render=True, print_results=True)

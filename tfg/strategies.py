@@ -43,6 +43,17 @@ class Strategy(abc.ABC):
         """
         raise NotImplementedError
 
+    def update(self, action):
+        """Reports that the given action has been taken so that this Strategy
+        can update itself. Optional method, subclasses may implement it or not.
+
+        Args:
+            action (object): Action taken. None means that this Strategy must
+            reset everything.
+
+        """
+        pass
+
 
 class HumanStrategy(Strategy):
     """Implementation of Strategy so that humans can play a game."""
@@ -381,16 +392,17 @@ class MonteCarloTree(Strategy):
                  value_function=None,
                  simulation_policy=None,
                  update_function=None,
-                 best_node_policy=None):
+                 best_node_policy=None,
+                 reset_tree=True):
         """
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_iter (:obj:`int`, optioal): Total number of iterations of the
+            max_iter (:obj:`int`, optional): Total number of iterations of the
                 algorithm for each move. If not set, the algorithm will run
                 until there is no time left. Either max_iter or max_time (or
                 both) must be set.
-            max_time (:obj:`float`, optioal): Maximum amount of seconds the
+            max_time (:obj:`float`, optional): Maximum amount of seconds the
                 algorithm will be running for each move. If not set, the
                 algorithm will run exactly max_iter iterations. Time spent
                 during selection of the final move will not be taken into
@@ -439,6 +451,10 @@ class MonteCarloTree(Strategy):
                 backpropagation policy) and 'secure' returns the result of
                 the tfg.strategies.SecureChild formula with A=4. Defaults to
                 'robust'.
+            reset_tree (bool, optional): Whether to reset the game tree after
+                each call to move or keep it for the next call. Defaults to
+                True (reset). If set to False all moves must be reported via
+                the update method.
 
         """
         if max_iter is None and max_time is None:
@@ -479,6 +495,9 @@ class MonteCarloTree(Strategy):
             if isinstance(best_node_policy, str)
             else best_node_policy
         )
+
+        self.reset_tree = reset_tree
+        self._root = None
 
         self._stats = dict()
 
@@ -527,9 +546,18 @@ class MonteCarloTree(Strategy):
 
         # Initialize tree
         # TODO exploration noise here or is it up yo update_function?
-        root = MonteCarloTreeNode(observation, player)
-        root.expand(self._env, self._update_function)
-        root.visit_count += 1
+        if self._root is None:
+            root = MonteCarloTreeNode(observation, player)
+            root.expand(self._env, self._update_function)
+            root.visit_count = 1
+            if not self.reset_tree:
+                self._root = root
+        else:
+            root = self._root
+            if not root.expanded():
+                root.expand(self._env, self._update_function)
+            if root.visit_count == 0:
+                root.visit_count = 1
 
         i = 0
         # Iterate the algorithm max_iter times
@@ -592,6 +620,18 @@ class MonteCarloTree(Strategy):
         index = self._best_node_policy(children)
         self._save_stats(root, i, time.time() - start)
         return actions[index]
+
+    def update(self, action):
+        if not self.reset_tree:
+            if action is None:
+                self._root = None
+            elif self._root is not None:
+                if self._root.expanded() and action in self._root.children:
+                    self._root = self._root.children[action]
+                else:
+                    # Reset root in case it was not expanded
+                    # It will be expanded in the next call to move
+                    self._root = None
 
     def _save_stats(self, root, iterations, time_spent):
         actions = {

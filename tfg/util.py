@@ -6,6 +6,7 @@ from functools import reduce
 from joblib import Parallel, delayed
 
 from tfg.strategies import HumanStrategy
+from tfg.games import WHITE, BLACK
 
 
 def play(game, white, black, games=1, max_workers=None,
@@ -51,28 +52,32 @@ def play(game, white, black, games=1, max_workers=None,
             winner = game.winner()
             return {1: 0, 0: 1, -1: 2}[winner]
 
+        def move(obs):
+            this = players[game.to_play]
+            other = players[-game.to_play]
+            action = this.move(obs)
+            next_obs, _, done, _ = game.step(action)
+            this.update(action)
+            other.update(action)
+            return next_obs, done
+
         results = [0, 0, 0]
+        players = {WHITE: white, BLACK: black}
         for _ in range(g):
             observation = game.reset()
+            white.update(None)
+            black.update(None)
             if render and not isinstance(white, HumanStrategy):
                 game.render()
 
             while True:
-                action = white.move(observation)
-                observation, _, done, _ = game.step(action)
+                observation, done = move(observation)
                 if done:
                     results[get_winner_index()] += 1
                     print_winner()
                     break
-                elif render and not isinstance(black, HumanStrategy):
-                    game.render()
-                action = black.move(observation)
-                observation, _, done, _ = game.step(action)
-                if done:
-                    results[get_winner_index()] += 1
-                    print_winner()
-                    break
-                elif render and not isinstance(white, HumanStrategy):
+                elif (render and
+                      not isinstance(players[game.to_play], HumanStrategy)):
                     game.render()
 
         return tuple(results)
