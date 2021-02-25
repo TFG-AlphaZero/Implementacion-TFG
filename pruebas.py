@@ -16,4 +16,4 @@ alphaZero = AlphaZero(game, self_play_times=1)
 buffer = alphaZero.train()
 print(buffer)
 
-print("Esto es una nueva rama :)")
+print("Que te jodan")
