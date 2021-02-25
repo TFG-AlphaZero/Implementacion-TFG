@@ -2,9 +2,11 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import time
 
 from tfg.strategies import Strategy, argmax, MonteCarloTree
 from tfg.util import play
+from tfg.neuralNetworkAZ import NeuralNetworkAZ
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm.
@@ -59,9 +61,9 @@ class AlphaZero(Strategy):
         self._best_node_policy = BestNodePolicyAZ(self.t_equals_one)
 
         self.buffer = []
-        self.neural_network = [] #Implementar
+        self.neural_network = NeuralNetworkAZ()
         self.mcts = MonteCarloTree(self._env, max_iter=self.mcts_times, max_time=None,
-                                    selection_policy=None, value_function=None,
+                                    selection_policy=self._selection_policy, value_function=self._value_function,
                                     simulation_policy=None, update_function=None, best_node_policy=self._best_node_policy)
 
 
@@ -70,17 +72,28 @@ class AlphaZero(Strategy):
         """tfg.games.GameEnv: Game this strategy is for."""
         return self._env
 
-    def train(self):
+    def train(self, max_train_time = None, max_train_error = 0.01):
         """
 
         """
+        def keep_iterating():
+            result = True
+            if max_train_time is not None:
+                result &= (current_time - start_time) < max_train_time
+            result &= error > max_train_error
+            return result
 
-        #while True : #Cambiar por timeLeft o error > threshold
-        
+        start_time = time.time()
+        current_time = start_time
+        error = 1
+
+        #while keep_iterating() :
+            
         self.buffer += self._self_play(games=self.self_play_times)
 
-            #Neural Network
-            #entrenar network
+        #Neural Network
+        
+        current_time = time.time()
 
         return self.buffer
 
@@ -100,7 +113,7 @@ class AlphaZero(Strategy):
                     if done:
                         break
                 
-                buffer.append(GameData(game_states_data, self.env.winner))
+                buffer.append(GameData(game_states_data, self.env.winner()))
 
             return buffer
 
@@ -118,14 +131,22 @@ class AlphaZero(Strategy):
         raise NotImplementedError
         #return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
 
-
-
     def move(self, observation):
         """
 
         """
 
         raise NotImplementedError
+
+    def _value_function(self, node):
+        prob, rew = self.neural_network.predict(node.observation)
+        
+        for child in node.children:
+            child.probability = prob
+
+        return 1
+
+
 
 class GameData:
     """
@@ -140,10 +161,8 @@ class GameData:
         self._states = states
         self._result = result
 
-    def __str__(self):
-        for state in states:
-            print(state)
-        print(result)
+    def __repr__(self):
+        return '(' + str(self._states) + ', ' + str(self._result) + ')'
         
 
 class QPlusU:
@@ -156,20 +175,43 @@ class QPlusU:
     encourages the exploration. 
     
     c_puct is a parameter determining the exploration scale (5 for AlphaZero).
+
+    (root: MonteCarloTreeNode, children: [MonteCarloTreeNode]) -> selected_index: int,
     """
+
+
 
     def __init__(self, c_puct):
         """
-
         Args:
             c_puct (float): Exploration scale constant.
 
         """
         self.c_puct = c_puct
 
-    def __call__(self):
+    def __call__(self, root, children):
+        q_param = np.array([child.value for child in children])
         
-        raise NotImplementedError
+        children_visit_count = np.array([child.visit_count for child in children])
+        children_probabilities = np.array([child.probability for child in children])
+        u_param = c_puct * children_probabilities * np.sqrt(root.visit_count) / (1 + children_visit_count)
+
+        return np.argmax(q_param + u_param) 
+
+
+"""
+    def __call__(self, root, children):
+        values = np.array([child.value for child in children])
+        visits = np.array([child.visit_count for child in children])
+        if (visits == 0).any():
+            # Avoid divide by zero and choose one with visits == 0
+            return np.random.choice(np.where(visits == 0)[0])
+        uct_values = values + self.c * np.sqrt(
+            np.log(root.visit_count) / visits
+        )
+        return np.argmax(uct_values)
+
+"""
 
 class BestNodePolicyAZ:
     """
