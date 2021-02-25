@@ -1,7 +1,10 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
+import numpy as np
+
 from tfg.strategies import Strategy, argmax, MonteCarloTree
+from tfg.util import play
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm.
@@ -9,6 +12,7 @@ class AlphaZero(Strategy):
     Parameters setting:
     c_puct
     MCTS times
+    self_play_times
     Residual blocks
     Batch size
     Learning rate
@@ -22,6 +26,7 @@ class AlphaZero(Strategy):
     def __init__(self, env, max_training_time = None, 
                  c_puct = None, 
                  mcts_times = None,
+                 self_play_times = None,
                  residual_blocks = None,
                  batch_size = None,
                  learning_rate = None,
@@ -38,31 +43,80 @@ class AlphaZero(Strategy):
 
         if mcts_times is None:
             mcts_times = 800
+
+        if self_play_times is None:
+            self_play_times = 25_000
         
         if t_equals_one is None:
             t_equals_one = 30
 
         self._env = env
         self.mcts_times = mcts_times
+        self.self_play_times = self_play_times
         self.t_equals_one = t_equals_one
 
         self._selection_policy = QPlusU(c_puct)
+        self._best_node_policy = BestNodePolicyAZ(self.t_equals_one)
 
-        self.neural_network = []
-        self.mcts = MonteCarloTree(env, mcts_times, None, self._selection_policy, )
+        self.buffer = []
+        self.neural_network = [] #Implementar
+        self.mcts = MonteCarloTree(self._env, max_iter=self.mcts_times, max_time=None,
+                                    selection_policy=None, value_function=None,
+                                    simulation_policy=None, update_function=None, best_node_policy=self._best_node_policy)
 
 
     @property
     def env(self):
         """tfg.games.GameEnv: Game this strategy is for."""
-        return self.env
+        return self._env
 
     def train(self):
         """
 
         """
 
+        #while True : #Cambiar por timeLeft o error > threshold
+        
+        self.buffer += self._self_play(games=self.self_play_times)
+
+            #Neural Network
+            #entrenar network
+
+        return self.buffer
+
+    def _self_play(self, games = 1, max_workers = None):
+        def _self_play_(g):
+            buffer = []
+
+            for _ in range(g):
+                observation = self.env.reset()
+                game_states_data = []
+
+                while True:
+                    action = self.mcts.move(observation)
+                    game_states_data.append((observation, 10)) #Guardar las prob del nodo
+                    observation, _, done, _ = self.env.step(action)
+
+                    if done:
+                        break
+                
+                buffer.append(GameData(game_states_data, self.env.winner))
+
+            return buffer
+
+        if max_workers is None:
+            return _self_play_(games)
+
+        d_games = games // max_workers
+        r_games = games % max_workers
+        n_games = [d_games] * max_workers
+        if r_games != 0:
+            for i in range(r_games):
+                n_games[i] += 1
+
+        results = Parallel(max_workers)(delayed(_self_play_)(g) for g in n_games)
         raise NotImplementedError
+        #return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
 
 
 
@@ -72,6 +126,25 @@ class AlphaZero(Strategy):
         """
 
         raise NotImplementedError
+
+class GameData:
+    """
+    Class representing the data to store from a single game in order to train the neural network
+
+    """
+
+    def __init__(self, states = None, result = None):
+        if states is None:
+            states = []
+        
+        self._states = states
+        self._result = result
+
+    def __str__(self):
+        for state in states:
+            print(state)
+        print(result)
+        
 
 class QPlusU:
     """
@@ -98,9 +171,9 @@ class QPlusU:
         
         raise NotImplementedError
 
-class ProbVisitCount:
+class BestNodePolicyAZ:
     """
-    Class representing the best node policy used by AlphaZero.
+    Class representing the Best Node Policy used by AlphaZero.
     
     It is used at the end of MCTS algorithm to select the returned action.
     Selects the child which maximises:
@@ -129,7 +202,7 @@ class ProbVisitCount:
         self.counter = t_equals_one
 
     def __call__(self, nodes):
-        t = 1 if self.counter > 0 else 0.01 #Peta overflow si lo hago mas pequeno.
+        t = 1 if self.counter > 0 else 0.01 #Peta overflow si hago el t mas pequeno.
         self.counter = max(0, self.counter - 1)
 
         fun1 = lambda i : i.visit_count**(1/t)
@@ -138,7 +211,7 @@ class ProbVisitCount:
         sum = np.sum(fun2(nodes))
         pi = [fun1(node) / sum for node in nodes]
 
-        return pi #Mirar si es valido que devuelva esto
+        return np.argmax(pi)
     
     def reset(self):
         self.counter = self.t_equals_one

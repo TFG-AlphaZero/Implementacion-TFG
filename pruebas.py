@@ -1,22 +1,17 @@
-#Archivo para probar mierdas varias.
+import sys
+sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
+
 import numpy as np
+from gym.spaces import Discrete, Box
 
-from tfg.strategies import MonteCarloTreeNode
+from tfg.games import GameEnv, WHITE, BLACK
+from tfg.strategies import MonteCarloTree, HumanStrategy, Minimax
+from tfg.util import play
+from tfg.alphaZero import AlphaZero
+from examples.connect_n import ConnectN
+from examples.tictactoe import TicTacToe
 
-lista = np.array([40, 10, 5, 10, 15, 320])
-res = np.argmax(np.vectorize(lambda i : -np.log(i))(lista))
-
-#print(res)
-nodes = [MonteCarloTreeNode(None, None) for i in range(6)]
-for i in range(6):
-    nodes[i].visit_count = lista[i]
-
-t = 1
-fun1 = lambda i : i.visit_count**(1/t)
-fun2 = np.vectorize(fun1)
-
-sum = np.sum(fun2(nodes))
-
-pi = [fun1(node) / sum for node in nodes]
-print(pi)
-
+game = TicTacToe()
+alphaZero = AlphaZero(game, self_play_times=1)
+buffer = alphaZero.train()
+print(buffer)
