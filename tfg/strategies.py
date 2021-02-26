@@ -545,19 +545,13 @@ class MonteCarloTree(Strategy):
         player = self._env.to_play
 
         # Initialize tree
-        # TODO exploration noise here or is it up yo update_function?
+        # TODO exploration noise?
         if self._root is None:
             root = MonteCarloTreeNode(observation, player)
-            root.expand(self._env, self._update_function)
-            root.visit_count = 1
             if not self.reset_tree:
                 self._root = root
         else:
             root = self._root
-            if not root.expanded():
-                root.expand(self._env, self._update_function)
-            if root.visit_count == 0:
-                root.visit_count = 1
 
         i = 0
         # Iterate the algorithm max_iter times
@@ -592,7 +586,6 @@ class MonteCarloTree(Strategy):
                     # Simulation phase
                     reward = self._simulate(env) * player
                 else:
-                    # TODO check if * player will be necessary
                     # Estimate via value_function
                     reward = self._value_function(current_node) * player
 
@@ -729,11 +722,9 @@ class UCT:
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
-        if (visits == 0).any():
-            # Avoid divide by zero and choose one with visits == 0
-            return np.random.choice(np.where(visits == 0)[0])
+        # Sum 1 to visits to avoid dividing by zero
         uct_values = values + self.c * np.sqrt(
-            np.log(root.visit_count) / visits
+            np.log(root.visit_count) / (visits + 1)
         )
         return np.argmax(uct_values)
 
@@ -753,7 +744,7 @@ class OMC:
 
     """
 
-    # TODO fix division by zero
+    # TODO fix infinities (or even remove)
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
@@ -761,8 +752,9 @@ class OMC:
         best_value = values.max()
         urgencies = sp.erfc((best_value - values) / (np.sqrt(2) * sigma))
         urg_sum = urgencies.sum()
+        # Sum 1 to visits to avoid dividing by zero
         return np.argmax((root.visit_count * urgencies) /
-                         (visits * (urg_sum - urgencies)))
+                         ((visits + 1) * (urg_sum - urgencies)))
 
 
 class PBBM:
@@ -780,7 +772,7 @@ class PBBM:
 
     """
 
-    # TODO fix division by zero
+    # TODO fix infinities (or even remove)
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
@@ -791,8 +783,9 @@ class PBBM:
         urgencies = np.exp(-2.4 * (best_value - values) /
                            (np.sqrt(2 * (best_sigma + sigma ** 2))))
         urg_sum = urgencies.sum()
+        # Sum 1 to visits to avoid dividing by zero
         return np.argmax((root.visit_count * urgencies) /
-                         (visits * (urg_sum - urgencies)))
+                         ((visits + 1) * (urg_sum - urgencies)))
 
 
 class SecureChild:
