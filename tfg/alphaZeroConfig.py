@@ -1,0 +1,16 @@
+"""In this file, every alphaZero parameter is set"""
+
+#1) Self Play
+C_PUCT = 5
+EPSILON = 0.001
+MCTS_TIMES = 800
+SELF_PLAY_TIMES = 25_000
+T_EQUALS_ONE = 30
+
+#2) Retrain Network
+LEARNING_RATE = 0.1
+BATCH_SIZE = 2048
+EPOCHS = 1
+RESIDUAL_LAYERS = 40
+CONV_FILTERS = 256
+CONV_KERNEL_SIZE = (3, 3)

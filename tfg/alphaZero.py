@@ -3,68 +3,56 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 
 import numpy as np
 import time
+import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, argmax, MonteCarloTree
 from tfg.util import play
-from tfg.neuralNetworkAZ import NeuralNetworkAZ
+from tfg.alphaZeroNN import NeuralNetwork
+
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm.
 
-    Parameters setting:
-    c_puct
-    MCTS times
-    self_play_times
-    Residual blocks
-    Batch size
-    Learning rate
-    Optimizer
-    Dirichlet noise
-    Weight of noise
-    t = 1 for the first n moves
-
     """
 
-    def __init__(self, env, max_training_time = None, 
-                 c_puct = None, 
-                 mcts_times = None,
-                 self_play_times = None,
-                 residual_blocks = None,
-                 batch_size = None,
-                 learning_rate = None,
-                 t_equals_one = None):
+    def __init__(self, env,
+                 c_puct = config.C_PUCT, mcts_times = config.MCTS_TIMES, self_play_times = config.SELF_PLAY_TIMES,  t_equals_one = config.T_EQUALS_ONE, epsilon = config.EPSILON,
+                 batch_size = config.BATCH_SIZE, learning_rate = config.LEARNING_RATE, epochs = config.EPOCHS, residual_layers = config.RESIDUAL_LAYERS,
+                 conv_filters = config.CONV_FILTERS, conv_kernel_size = config.CONV_KERNEL_SIZE):
         """
 
         Args:
-            ...
+            Me da pereza escribirlos todos xd
 
         """
         
-        if c_puct is None:
-            c_puct = 5
-
-        if mcts_times is None:
-            mcts_times = 800
-
-        if self_play_times is None:
-            self_play_times = 25_000
-        
-        if t_equals_one is None:
-            t_equals_one = 30
 
         self._env = env
+
+        self.c_puct = c_puct
         self.mcts_times = mcts_times
         self.self_play_times = self_play_times
         self.t_equals_one = t_equals_one
+        self.epsilon = epsilon
 
-        self._selection_policy = QPlusU(c_puct)
-        self._best_node_policy = BestNodePolicyAZ(self.t_equals_one)
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.residual_layers = residual_layers
+        self.conv_filters = conv_filters
+        self.conv_kernel_size = conv_kernel_size
 
-        self.buffer = []
-        self.neural_network = NeuralNetworkAZ()
+        self._selection_policy = QPlusU(self.c_puct)
+        self._best_node_policy = BestNodePolicyAZ(self.t_equals_one, self.epsilon)
+
         self.mcts = MonteCarloTree(self._env, max_iter=self.mcts_times, max_time=None,
                                     selection_policy=self._selection_policy, value_function=self._value_function,
                                     simulation_policy=None, update_function=None, best_node_policy=self._best_node_policy)
+
+        self.buffer = []
+        self.neural_network = NeuralNetwork(learning_rate=self.learning_rate, input_dim = (2, ), output_dim = 1, 
+                                            residual_layers=self.residual_layers, filters = self.conv_filters, kernel_size=self.conv_kernel_size)
+                                            #Cambiar input_dim y output_dim
 
 
     @property
@@ -231,7 +219,7 @@ class BestNodePolicyAZ:
     which returns pi(a|s) for each action
     """
 
-    def __init__(self, t_equals_one):
+    def __init__(self, t_equals_one, epsilon):
         """
 
         Args:
@@ -242,9 +230,10 @@ class BestNodePolicyAZ:
 
         self.t_equals_one = t_equals_one
         self.counter = t_equals_one
+        self.epsilon = epsilon
 
     def __call__(self, nodes):
-        t = 1 if self.counter > 0 else 0.01 #Peta overflow si hago el t mas pequeno.
+        t = 1 if self.counter > 0 else self.epsilon #Peta overflow si hago el t mas pequeno.
         self.counter = max(0, self.counter - 1)
 
         fun1 = lambda i : i.visit_count**(1/t)

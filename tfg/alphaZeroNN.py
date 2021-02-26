@@ -6,17 +6,18 @@ from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU
 from tensorflow.keras.optimizers import SGD
 
 
-class NeuralNetworkAZ():
+class NeuralNetwork():
 
-    def __init__(self, learning_rate = 0.01, input_dim = 1, output_dim = 1, hidden_layers = 40):
+    def __init__(self, learning_rate, input_dim, output_dim, residual_layers, filters, kernel_size):
         self.learning_rate = learning_rate
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.hidden_layers = hidden_layers
-        self.model = self._create_model()
+        self.residual_layers = residual_layers
+        
+        self.model = self._create_model(filters, kernel_size)
 
-    def _create_model(self, filters = 256, kernel_size = (3, 3)):
-        input = Input() #Parametros
+    def _create_model(self, filters, kernel_size):
+        input = Input(shape = self.input_dim) #Parametros
         nn = self._create_convolutional_layer(input, filters, kernel_size)
 
         for i in range(self.hidden_layers) :
@@ -31,10 +32,17 @@ class NeuralNetworkAZ():
         
         return model
 
+    def _create_convolutional_layer(self, input, filters, kernel_size):
+        layer = Conv2D(filters = filters, kernel_size = kernel_size, activation='linear')(input) #More parameters
+        layer = BatchNormalization(axis=1)(layer)
+        layer = LeakyReLU()(layer)
+
+        return layer
+
     def _create_residual_layer(self, input, filters, kernel_size):
         layer = self._create_convolutional_layer(input, filters, kernel_size)
         
-        layer = Conv2D(filters = filters, kernel_size=kernel_size, activation='linear') #More parameters
+        layer = Conv2D(filters = filters, kernel_size=kernel_size, activation='linear')(layer) #More parameters
         layer = BatchNormalization(axis=1)(layer)
 
         layer = add([input, layer]) #Skip connection
@@ -42,16 +50,9 @@ class NeuralNetworkAZ():
         layer = LeakyReLU()(layer)
 
         return layer
-    
-    def _create_convolutional_layer(self, input, filters, kernel_size):
-        layer = Conv2D(filters = filters, kernel_size=kernel_size, activation='linear') #More parameters
-        layer = BatchNormalization(axis=1)(layer)
-        layer = LeakyReLU()(layer)
-
-        return layer
-    
-    def _create_value_head(self):
-        layer = Conv2D(filters = 1, kernel_size=(1, 1), activation='linear')
+        
+    def _create_value_head(self, input):
+        layer = Conv2D(filters = 1, kernel_size=(1, 1), activation='linear')(input)
         layer = BatchNormalization(axis=1)(layer)
         layer = LeakyReLU()(layer)
 
@@ -63,8 +64,8 @@ class NeuralNetworkAZ():
 
         return layer
 
-    def _create_policy_head(self):
-        layer = Conv2D(filters = 2, kernel_size = (1, 1), activation = 'linear')
+    def _create_policy_head(self, input):
+        layer = Conv2D(filters = 2, kernel_size = (1, 1), activation = 'linear')(input)
         layer = BatchNormalization(axis=1)(layer)
         layer = LeakyReLU()(layer)
 
@@ -73,12 +74,8 @@ class NeuralNetworkAZ():
         
         return layer
 
-    def predict(self, data):
-        return self.model.predict(data)
+    def predict(self, X):
+        return self.model.predict(X)
 
-    def fit(self):
-        return self.model.fit()
-
-
-
-    
+    def fit(self, X, Y, batch_size, epochs, verbose, validation_split):
+        return self.model.fit(x=X, y=Y, batch_size = batch_size, epochs = epochs, verbose = verbose, validation_split = validation_split)
