@@ -17,8 +17,8 @@ class AlphaZero(Strategy):
 
     def __init__(self, env,
                  c_puct = config.C_PUCT, mcts_times = config.MCTS_TIMES, self_play_times = config.SELF_PLAY_TIMES,  t_equals_one = config.T_EQUALS_ONE, epsilon = config.EPSILON,
-                 batch_size = config.BATCH_SIZE, learning_rate = config.LEARNING_RATE, epochs = config.EPOCHS, residual_layers = config.RESIDUAL_LAYERS,
-                 conv_filters = config.CONV_FILTERS, conv_kernel_size = config.CONV_KERNEL_SIZE):
+                 batch_size = config.BATCH_SIZE, learning_rate = config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM, 
+                 epochs = config.EPOCHS, residual_layers = config.RESIDUAL_LAYERS, conv_filters = config.CONV_FILTERS, conv_kernel_size = config.CONV_KERNEL_SIZE):
         """
 
         Args:
@@ -28,7 +28,7 @@ class AlphaZero(Strategy):
         
 
         self._env = env
-
+        #Quizas sea innecesario guardar todos estos parametros y enchufarlos directamente al mcts y neural network sin guardarlos en atributos.
         self.c_puct = c_puct
         self.mcts_times = mcts_times
         self.self_play_times = self_play_times
@@ -37,6 +37,8 @@ class AlphaZero(Strategy):
 
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.regularizer_constant = regularizer_constant
+        self.momentum = momentum
         self.epochs = epochs
         self.residual_layers = residual_layers
         self.conv_filters = conv_filters
@@ -50,10 +52,9 @@ class AlphaZero(Strategy):
                                     simulation_policy=None, update_function=None, best_node_policy=self._best_node_policy)
 
         self.buffer = []
-        self.neural_network = NeuralNetwork(learning_rate=self.learning_rate, input_dim = (2, ), output_dim = 1, 
+        self.neural_network = NeuralNetwork(learning_rate=self.learning_rate, regularizer_constant = self.regularizer_constant, momentum = self.momentum,
+                                            input_dim = config.INPUT_LAYERS + self._env.observation_space.shape, output_dim = self._env.action_space.n, 
                                             residual_layers=self.residual_layers, filters = self.conv_filters, kernel_size=self.conv_kernel_size)
-                                            #Cambiar input_dim y output_dim
-
 
     @property
     def env(self):
