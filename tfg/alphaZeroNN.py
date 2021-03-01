@@ -111,7 +111,7 @@ class NeuralNetworkAZ():
         self.model.save(path)
 
     def load_model(self, path):
-        return load_model(path)
+        self.model = load_model(path)
 
 """
 #Example of use provided below!

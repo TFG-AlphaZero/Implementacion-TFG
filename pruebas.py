@@ -12,5 +12,9 @@ from examples.connect_n import ConnectN
 from examples.tictactoe import TicTacToe
 
 game = TicTacToe()
-alphaZero = AlphaZero(game, self_play_times=1)
+alphaZero = AlphaZero(game, self_play_times=3)
+alphaZero.load('models/TicTacToeDemo.h5')
 alphaZero.train()
+alphaZero.save('models/TicTacToeDemo.h5')
+results = play(game, Minimax(game), alphaZero, games = 10)
+print(results)

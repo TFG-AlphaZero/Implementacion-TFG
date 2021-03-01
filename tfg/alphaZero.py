@@ -78,8 +78,7 @@ class AlphaZero(Strategy):
         current_time = start_time
         error = 1
 
-        #while keep_iterating() :
-        for i in range(2):
+        while keep_iterating() :
             self.buffer += self._self_play(games=self.self_play_times)
             
             x, y, z = zip(*self.buffer)
@@ -99,6 +98,7 @@ class AlphaZero(Strategy):
 
             for _ in range(g):
                 observation = self.env.reset()
+                self._best_node_policy.reset()
                 game_states_data = []
 
                 while True:
@@ -109,8 +109,10 @@ class AlphaZero(Strategy):
                     if done:
                         break
                 
-                for i in range(len(game_states_data)) :
-                    game_states_data[i] += (self.env.winner(),)
+                perspective = 1
+                for i in range(len(game_states_data)-1, -1, -1) :
+                    game_states_data[i] += (perspective * self.env.winner(),)
+                    perspective *= -1
                 buffer += game_states_data
 
             return buffer
@@ -130,11 +132,13 @@ class AlphaZero(Strategy):
         #return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
 
     def move(self, observation):
-        """
+        return self.mcts.move(observation)
 
-        """
+    def save(self, path):
+        self.neural_network.save_model(path)
 
-        raise NotImplementedError
+    def load(self, path):
+        self.neural_network.load_model(path)
 
     def _value_function(self, node):
         nn_input = np.array([self._convert_to_network_input(node.observation)])
@@ -246,7 +250,8 @@ class BestNodePolicyAZ:
         self.pi = None
 
     def __call__(self, nodes):
-        t = 1 if self.counter > 0 else self.epsilon #Peta overflow si hago el t mas pequeno.
+        t = 1 #Recordar cambiar esto! Es para que no pete. Ademas, tenemos el problema de como hacer reset cuando jugamos varios juegos.
+        #t = 1 if self.counter > 0 else self.epsilon #Peta overflow si hago el t mas pequeno o visit_count se hace > 3
         self.counter = max(0, self.counter - 1)
 
         visit_vector = []
