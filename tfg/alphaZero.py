@@ -7,7 +7,7 @@ import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, argmax, MonteCarloTree
 from tfg.util import play
-from tfg.alphaZeroNN import NeuralNetwork
+from tfg.alphaZeroNN import NeuralNetworkAZ
 
 
 class AlphaZero(Strategy):
@@ -43,7 +43,9 @@ class AlphaZero(Strategy):
         self.residual_layers = residual_layers
         self.conv_filters = conv_filters
         self.conv_kernel_size = conv_kernel_size
-
+        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
+        self.output_dim = self._env.action_space.n
+        
         self._selection_policy = QPlusU(self.c_puct)
         self._best_node_policy = BestNodePolicyAZ(self.t_equals_one, self.epsilon)
 
@@ -52,16 +54,16 @@ class AlphaZero(Strategy):
                                     simulation_policy=None, update_function=None, best_node_policy=self._best_node_policy)
 
         self.buffer = []
-        self.neural_network = NeuralNetwork(learning_rate=self.learning_rate, regularizer_constant = self.regularizer_constant, momentum = self.momentum,
-                                            input_dim = config.INPUT_LAYERS + self._env.observation_space.shape, output_dim = self._env.action_space.n, 
-                                            residual_layers=self.residual_layers, filters = self.conv_filters, kernel_size=self.conv_kernel_size)
+        self.neural_network = NeuralNetworkAZ(learning_rate=self.learning_rate, regularizer_constant = self.regularizer_constant, momentum = self.momentum,
+                                              input_dim = self.input_dim, output_dim = self.output_dim, 
+                                              residual_layers=self.residual_layers, filters = self.conv_filters, kernel_size=self.conv_kernel_size)
 
     @property
     def env(self):
         """tfg.games.GameEnv: Game this strategy is for."""
         return self._env
 
-    def train(self, max_train_time = None, max_train_error = 0.01):
+    def train(self, max_train_time = config.MAX_TRAIN_TIME, max_train_error = config.MAX_TRAIN_ERROR):
         """
 
         """
@@ -76,15 +78,11 @@ class AlphaZero(Strategy):
         current_time = start_time
         error = 1
 
-        #while keep_iterating() :
-            
-        self.buffer += self._self_play(games=self.self_play_times)
+        while keep_iterating() :
+            self.buffer += self._self_play(games=self.self_play_times)
 
-        #Neural Network
-        
-        current_time = time.time()
+            current_time = time.time()
 
-        return self.buffer
 
     def _self_play(self, games = 1, max_workers = None):
         def _self_play_(g):
@@ -128,13 +126,32 @@ class AlphaZero(Strategy):
         raise NotImplementedError
 
     def _value_function(self, node):
-        prob, rew = self.neural_network.predict(node.observation)
+        nn_input = np.array([self._convert_to_network_input(node.observation)])
+        predictions = self.neural_network.predict(nn_input) #Devuelve nan, hay que fit la red antes?
         
-        for child in node.children:
-            child.probability = prob
+        #To be done
 
-        return 1
 
+        for i in range(len(node.children)):
+            node.children[i].probability = probabilities[i]
+
+        return reward
+
+    def _convert_to_network_input(self, observation):
+        def convert_to_binary(board):
+            first = board.copy()
+            first[first == -1] = 0
+
+            second = board.copy()
+            second[second == 1] = 0
+            second[second == -1] = 1
+
+            return np.append(first, second)
+        
+        input = convert_to_binary(observation)
+        input = np.reshape(input, self.input_dim)
+
+        return input
 
 
 class GameData:
