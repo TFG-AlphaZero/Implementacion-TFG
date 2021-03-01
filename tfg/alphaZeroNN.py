@@ -114,6 +114,8 @@ class NeuralNetworkAZ():
         return load_model(path)
 
 """
+#Example of use provided below!
+
 input_dimension = (3, 3) + config.INPUT_LAYERS
 output_dimension = 9
 
@@ -130,15 +132,6 @@ second_player = np.array([[0,0,0],
                           [0,0,0], 
                           [0,0,1]])
 sample_1 = np.reshape(np.append(first_player, second_player), input_dimension)
-
-first_player = np.array([[1,0,0], 
-                         [0,1,0], 
-                         [1,0,0]])
-
-second_player = np.array([[0,0,1], 
-                          [0,0,1], 
-                          [0,0,1]])
-sample_2 = np.reshape(np.append(first_player, second_player), input_dimension)
 
 train_X = np.array([sample_1])
 train_Y = np.array([-1])

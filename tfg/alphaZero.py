@@ -47,7 +47,7 @@ class AlphaZero(Strategy):
         self.output_dim = self._env.action_space.n
         
         self._selection_policy = QPlusU(self.c_puct)
-        self._best_node_policy = BestNodePolicyAZ(self.t_equals_one, self.epsilon)
+        self._best_node_policy = BestNodePolicyAZ(self._env, self.t_equals_one, self.epsilon)
 
         self.mcts = MonteCarloTree(self._env, max_iter=self.mcts_times, max_time=None,
                                     selection_policy=self._selection_policy, value_function=self._value_function,
@@ -78,10 +78,19 @@ class AlphaZero(Strategy):
         current_time = start_time
         error = 1
 
-        while keep_iterating() :
+        #while keep_iterating() :
+        for i in range(2):
             self.buffer += self._self_play(games=self.self_play_times)
-
+            
+            x, y, z = zip(*self.buffer)
+            train_X = np.array([self._convert_to_network_input(obs) for obs in list(x)])
+            train_Prob = np.array(list(y))
+            train_Rew = np.array(list(z))
+            
+            self.neural_network.fit(X = train_X, Y = [train_Rew, train_Prob], batch_size = self.batch_size, epochs = self.epochs, verbose = 2, validation_split = 0)
+            
             current_time = time.time()
+
 
 
     def _self_play(self, games = 1, max_workers = None):
@@ -94,13 +103,15 @@ class AlphaZero(Strategy):
 
                 while True:
                     action = self.mcts.move(observation)
-                    game_states_data.append((observation, 10)) #Guardar las prob del nodo
+                    game_states_data.append((observation, self._best_node_policy.pi))
                     observation, _, done, _ = self.env.step(action)
 
                     if done:
                         break
                 
-                buffer.append(GameData(game_states_data, self.env.winner()))
+                for i in range(len(game_states_data)) :
+                    game_states_data[i] += (self.env.winner(),)
+                buffer += game_states_data
 
             return buffer
 
@@ -127,14 +138,14 @@ class AlphaZero(Strategy):
 
     def _value_function(self, node):
         nn_input = np.array([self._convert_to_network_input(node.observation)])
-        predictions = self.neural_network.predict(nn_input) #Devuelve nan, hay que fit la red antes?
+        predictions = self.neural_network.predict(nn_input)
         
-        #To be done
+        reward = predictions[0][0][0]
+        probabilities = predictions[1][0]
 
-
-        for i in range(len(node.children)):
+        for i in node.children:
             node.children[i].probability = probabilities[i]
-
+        
         return reward
 
     def _convert_to_network_input(self, observation):
@@ -152,24 +163,6 @@ class AlphaZero(Strategy):
         input = np.reshape(input, self.input_dim)
 
         return input
-
-
-class GameData:
-    """
-    Class representing the data to store from a single game in order to train the neural network
-
-    """
-
-    def __init__(self, states = None, result = None):
-        if states is None:
-            states = []
-        
-        self._states = states
-        self._result = result
-
-    def __repr__(self):
-        return '(' + str(self._states) + ', ' + str(self._result) + ')'
-        
 
 class QPlusU:
     """
@@ -200,7 +193,7 @@ class QPlusU:
         
         children_visit_count = np.array([child.visit_count for child in children])
         children_probabilities = np.array([child.probability for child in children])
-        u_param = c_puct * children_probabilities * np.sqrt(root.visit_count) / (1 + children_visit_count)
+        u_param = self.c_puct * children_probabilities * np.sqrt(root.visit_count) / (1 + children_visit_count)
 
         return np.argmax(q_param + u_param) 
 
@@ -237,7 +230,7 @@ class BestNodePolicyAZ:
     which returns pi(a|s) for each action
     """
 
-    def __init__(self, t_equals_one, epsilon):
+    def __init__(self, env, t_equals_one, epsilon):
         """
 
         Args:
@@ -246,21 +239,30 @@ class BestNodePolicyAZ:
 
         """
 
+        self._env = env
         self.t_equals_one = t_equals_one
         self.counter = t_equals_one
         self.epsilon = epsilon
+        self.pi = None
 
     def __call__(self, nodes):
         t = 1 if self.counter > 0 else self.epsilon #Peta overflow si hago el t mas pequeno.
         self.counter = max(0, self.counter - 1)
 
-        fun1 = lambda i : i.visit_count**(1/t)
+        visit_vector = []
+        for action in range(self._env.action_space.n): #Hay que cambiarlo
+            if action in nodes :
+                visit_vector.append(nodes[action].visit_count)
+            else :
+                visit_vector.append(0)
+        
+        fun1 = lambda i : i**(1/t)
         fun2 = np.vectorize(fun1)
 
-        sum = np.sum(fun2(nodes))
-        pi = [fun1(node) / sum for node in nodes]
+        sum = np.sum(fun2(visit_vector))
+        self.pi = [fun1(visits) / sum for visits in visit_vector] #Store because needed later
 
-        return np.argmax(pi)
+        return np.argmax(self.pi)
     
     def reset(self):
         self.counter = self.t_equals_one

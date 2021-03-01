@@ -610,9 +610,9 @@ class MonteCarloTree(Strategy):
         actions = list(actions)
         children = list(children)
 
-        index = self._best_node_policy(children)
+        index = self._best_node_policy(root.children)
         self._save_stats(root, i, time.time() - start)
-        return actions[index]
+        return index
 
     def update(self, action):
         if not self.reset_tree:
