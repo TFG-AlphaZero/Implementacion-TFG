@@ -266,18 +266,8 @@ class Minimax(Strategy):
         return legal_actions
 
 
-class MonteCarloTreeNode:
+class MonteCarloTreeNode(dict):
     """Node used during the Monte Carlo Tree Search algorithm."""
-
-    observation = None
-    to_play = None
-    visit_count = 0
-    value = 0
-    value_sum = 0
-    value_squared_sum = 0
-    value_variance = np.inf
-    children = None
-    attrs = None
 
     def __init__(self, observation, to_play):
         """
@@ -288,10 +278,15 @@ class MonteCarloTreeNode:
                 or WHITE.
 
         """
+        super(MonteCarloTreeNode, self).__init__()
         self.observation = observation
         self.to_play = to_play
+        self.visit_count = 0
+        self.value = 0
+        self.value_sum = 0
+        self.value_squared_sum = 0
+        self.value_variance = np.inf
         self.children = dict()
-        self.attrs = dict()
 
     def expanded(self):
         """Returns whether this node has already been expanded or not.
@@ -348,17 +343,6 @@ class MonteCarloTreeNode:
 
     def __hash__(self):
         return hash((self.observation, self.to_play))
-
-    def __getattr__(self, key):
-        try:
-            return self.attrs[key]
-        except KeyError as e:
-            raise AttributeError(e)
-
-    def __setattr__(self, key, value):
-        if hasattr(self, key):
-            return super().__setattr__(key, value)
-        self.attrs[key] = value
 
 
 # TODO check if those are the correct papers
@@ -607,6 +591,7 @@ class MonteCarloTree(Strategy):
         # Finally choose the best action at the root according to the policy
         actions, children = zip(*root.children.items())
         # Ensure same ordering of children and actions
+        # TODO fix this to work with AlphaZero
         actions = list(actions)
         children = list(children)
 
@@ -776,12 +761,12 @@ class PBBM:
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
-        sigma = np.sqrt([child.value_variance for child in children])
+        sigma_sq = np.array([child.value_variance for child in children])
         best_node = np.argmax(values)
         best_value = values[best_node]
-        best_sigma = sigma[best_node]
+        best_sigma_sq = sigma_sq[best_node]
         urgencies = np.exp(-2.4 * (best_value - values) /
-                           (np.sqrt(2 * (best_sigma + sigma ** 2))))
+                           (np.sqrt(2 * (best_sigma_sq + sigma_sq))))
         urg_sum = urgencies.sum()
         # Sum 1 to visits to avoid dividing by zero
         return np.argmax((root.visit_count * urgencies) /
