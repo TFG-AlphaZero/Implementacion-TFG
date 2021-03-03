@@ -11,9 +11,17 @@ from keras.optimizers import SGD, Adam, RMSprop
 from keras import regularizers
 
 
-class NeuralNetworkAZ():
+class NeuralNetworkAZ:
 
-    def __init__(self, learning_rate, regularizer_constant, momentum, input_dim, output_dim, residual_layers, filters, kernel_size):
+    def __init__(self,
+                 learning_rate,
+                 regularizer_constant,
+                 momentum,
+                 input_dim,
+                 output_dim,
+                 residual_layers,
+                 filters,
+                 kernel_size):
         self.learning_rate = learning_rate
         self.regularizer_constant = regularizer_constant
         self.momentum = momentum
@@ -24,10 +32,10 @@ class NeuralNetworkAZ():
         self.model = self._create_model(filters, kernel_size)
 
     def _create_model(self, filters, kernel_size):
-        input = Input(shape = self.input_dim)
+        input = Input(shape=self.input_dim)
         nn = self._create_convolutional_layer(input, filters, kernel_size)
 
-        for i in range(self.residual_layers) :
+        for i in range(self.residual_layers):
             nn = self._create_residual_layer(nn, filters, kernel_size)
 
         value_head = self._create_value_head(nn)
@@ -35,16 +43,32 @@ class NeuralNetworkAZ():
         policy_head = self._create_policy_head(nn)
 
         model = Model(inputs=[input], outputs=[value_head, policy_head])
-        model.compile(optimizer = SGD(learning_rate = self.learning_rate, momentum = self.momentum), 
-                      loss = {'value_head' : 'mean_squared_error', 'policy_head' : 'categorical_crossentropy'}, #Modified! (deberiamos llamar a nuestra funcion self._softmax_cross_entropy -> peta)
-                      loss_weights={'value_head' : 0.5, 'policy_head' : 0.5})
+        model.compile(optimizer=SGD(learning_rate=self.learning_rate,
+                                    momentum=self.momentum),
+                      # TODO deberiamos llamar a nuestra funcion
+                      #  self._softmax_cross_entropy -> peta
+                      loss={
+                          'value_head': 'mean_squared_error',
+                          'policy_head': 'categorical_crossentropy'
+                      },
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5})
 
         return model
 
     def _create_convolutional_layer(self, input, filters, kernel_size):
-        layer = Conv2D(filters = filters, kernel_size = kernel_size, data_format="channels_last", padding='same',use_bias=False, 
-                       activation='linear', kernel_regularizer = regularizers.l2(self.regularizer_constant))(input)
-        layer = BatchNormalization(axis = -1)(layer) #Ojo! Usar axis = 1 si cambiamos a channels_first
+        # TODO podemos ponerles nombres a los layers para que se visualicen
+        #  mejor
+        layer = Conv2D(
+            filters=filters,
+            kernel_size=kernel_size,
+            data_format="channels_last",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(input)
+        # Use axis=1 if channels_first
+        layer = BatchNormalization(axis=-1)(layer)
         layer = LeakyReLU()(layer)
 
         return layer
@@ -52,66 +76,113 @@ class NeuralNetworkAZ():
     def _create_residual_layer(self, input, filters, kernel_size):
         layer = self._create_convolutional_layer(input, filters, kernel_size)
 
-        layer = Conv2D(filters = filters, kernel_size = kernel_size, data_format="channels_last", padding='same',use_bias=False, 
-                activation='linear', kernel_regularizer = regularizers.l2(self.regularizer_constant))(layer)
+        layer = Conv2D(
+            filters=filters,
+            kernel_size=kernel_size,
+            data_format="channels_last",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(layer)
         layer = BatchNormalization(axis=-1)(layer)
 
-        layer = add([input, layer]) #Skip connection
+        # Skip connection
+        layer = add([input, layer])
 
         layer = LeakyReLU()(layer)
 
         return layer
         
     def _create_value_head(self, input):
-        layer = Conv2D(filters = 1, kernel_size = (1, 1), data_format="channels_last", padding='same', use_bias=False, 
-                activation='linear', kernel_regularizer = regularizers.l2(self.regularizer_constant))(input)
+        layer = Conv2D(
+            filters=1,
+            kernel_size=(1, 1),
+            data_format="channels_last",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(input)
         layer = BatchNormalization(axis=-1)(layer)
         layer = LeakyReLU()(layer)
 
         layer = Flatten()(layer)
-        layer = Dense(20, activation='linear', use_bias=False, kernel_regularizer = regularizers.l2(self.regularizer_constant))(layer) #Hemos puesto 20 pero en el paper son 256
+        # We are using 20 but they used 256 in the paper
+        layer = Dense(
+            20,
+            activation='linear',
+            use_bias=False,
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(layer)
         layer = LeakyReLU()(layer)
         
-        layer = Dense(1, activation='tanh', use_bias=False, kernel_regularizer = regularizers.l2(self.regularizer_constant), name = 'value_head')(layer)
+        layer = Dense(
+            1,
+            activation='tanh',
+            use_bias=False,
+            kernel_regularizer=regularizers.l2(self.regularizer_constant),
+            name='value_head'
+        )(layer)
 
         return layer
 
     def _create_policy_head(self, input):
-        layer = Conv2D(filters = 2, kernel_size = (1, 1), data_format="channels_last", padding='same', use_bias=False, 
-                activation='linear', kernel_regularizer = regularizers.l2(self.regularizer_constant))(input)
+        layer = Conv2D(
+            filters=2,
+            kernel_size=(1, 1),
+            data_format="channels_last",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(input)
         layer = BatchNormalization(axis=-1)(layer)
         layer = LeakyReLU()(layer)
 
         layer = Flatten()(layer)
         #layer = Dense(self.output_dim, activation='linear', use_bias=False, kernel_regularizer = regularizers.l2(self.regularizer_constant), name = 'policy_head')(layer)
-        
-        layer = Dense(self.output_dim, activation='linear', use_bias=False, kernel_regularizer = regularizers.l2(self.regularizer_constant))(layer) #Modified!
-        layer = Activation('softmax', name = 'policy_head')(layer) #Modified!
+
+        # TODO modified
+        layer = Dense(
+            self.output_dim,
+            activation='linear',
+            use_bias=False,
+            kernel_regularizer=regularizers.l2(self.regularizer_constant)
+        )(layer)
+        layer = Activation('softmax', name='policy_head')(layer)  # Modified!
 
         return layer
 
-    def _softmax_cross_entropy(self, Y, Y_predicted): #Not working properly
-        pi = Y
-        prob = Y_predicted
+    # FIXME not working properly
+    @staticmethod
+    def _softmax_cross_entropy(y, y_predicted):
+        pi = y
+        prob = y_predicted
         
-        zero = tf.zeros(shape = tf.shape(pi), dtype = tf.float32)
+        zero = tf.zeros(shape=tf.shape(pi), dtype=tf.float32)
         where = tf.equal(pi, zero)
         negatives = tf.fill(tf.shape(pi), -100.0)
         prob = tf.where(where, negatives, prob)
         
-        return tf.nn.softmax_cross_entropy_with_logits(labels = pi, logits = prob)
+        return tf.nn.softmax_cross_entropy_with_logits(labels=pi, logits=prob)
     
-    def fit(self, X, Y, batch_size, epochs, verbose, validation_split):
-        return self.model.fit(x=X, y=Y, batch_size = batch_size, epochs = epochs, verbose = verbose, validation_split = validation_split)
+    # def fit(self, x, y, batch_size, epochs, verbose, validation_split):
+    def fit(self, *args, **kwargs):
+        # return self.model.fit(x=x, y=y, batch_size=batch_size, epochs=epochs,
+        #                       verbose=verbose,
+        #                       validation_split=validation_split)
+        return self.model.fit(*args, **kwargs)
 
-    def predict(self, X):
-        return self.model.predict(X)
+    def predict(self, x):
+        return self.model.predict(x)
     
     def save_model(self, path):
         self.model.save(path)
 
     def load_model(self, path):
         self.model = load_model(path)
+
 
 """
 #Example of use provided below!
