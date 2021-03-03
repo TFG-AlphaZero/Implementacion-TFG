@@ -124,10 +124,10 @@ class Minimax(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_depth (:obj:`int`, optional): Maximum depth the tree is allowed
-                to grow. If None it will grow until a
+            max_depth (int, optional): Maximum depth the tree is allowed to
+            grow. If None it will grow until a
                 leaf node is reached. If set, heuristic must be given. Defaults
-                    to None.
+                to None.
             heuristic (function, optional): If max_depth is not None, heuristic
                 function (observation: object, to_play: int) -> int that will be
                 called to estimate the value of a leaf node. This value will
@@ -135,7 +135,7 @@ class Minimax(Strategy):
                 the one who is winning and 0 if the game is estimated to end
                 in a draw. It is recommended that the return value of this
                 function is between -1 and 1.
-            alpha_beta (:obj:`bool`, optional): Determines whether or not to use
+            alpha_beta (bool, optional): Determines whether or not to use
                 AlphaBeta prune. Defaults to True.
             ordering (function, optional): Function (action: object) -> number
                 that will be used as key function to sort actions before
@@ -274,8 +274,7 @@ class MonteCarloTreeNode(dict):
 
         Args:
             observation (object): State of the game this node is representing.
-            to_play (:obj:`int`): Player to play in this state, either BLACK
-                or WHITE.
+            to_play (int): Player to play in this state, either BLACK or WHITE.
 
         """
         super(MonteCarloTreeNode, self).__init__()
@@ -382,25 +381,29 @@ class MonteCarloTree(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_iter (:obj:`int`, optional): Total number of iterations of the
+            max_iter (int, optional): Total number of iterations of the
                 algorithm for each move. If not set, the algorithm will run
                 until there is no time left. Either max_iter or max_time (or
                 both) must be set.
-            max_time (:obj:`float`, optional): Maximum amount of seconds the
+            max_time (float, optional): Maximum amount of seconds the
                 algorithm will be running for each move. If not set, the
                 algorithm will run exactly max_iter iterations. Time spent
                 during selection of the final move will not be taken into
                 account. Either max_iter or max_time (or both) must be set.
-            selection_policy (function or :obj:`str`, optional): Function
-                that will be used to select a child during selection phase Can
-                be either a function
+            selection_policy (function or str, optional): Function that will
+                be used to select a child during selection phase Can be
+                either a function
                     (root: MonteCarloTreeNode,
                     children: [MonteCarloTreeNode]) -> selected_index: int,
                 or a string representing the function to apply, one of the
                 following: {'random', 'uct', 'omc', 'pbbm'}, where 'uct' is
                 tfg.strategies.UCT with C=sqrt(2), 'omc' is
                 tfg.strategies.OMC and 'pbbm' is tfg.strategies.PBBM.
-                Defaults to 'uct'.
+                Defaults to 'uct'. If a functional class is given it can also
+                define the value_range (int, int) attribute which will tell the
+                backpropagation algorithm which value to pass, linearly
+                transforming original rewards returned by the game or
+                value_function from [-1, 1] to value_range.
             value_function (function, optional): Function that will be used
                 to compute the estimated value of a newly expanded node. Must
                 be a function
@@ -409,10 +412,12 @@ class MonteCarloTree(Strategy):
                 If this parameter is None the value will be estimated by
                 simulating a game starting from the expanded node. Otherwise,
                 the given function will be used and simulation_policy will be
-                ignored.
-            simulation_policy (function or :obj:`str`, optional): Function that
-                will be used to select the move that will be played in each
-                state of the self-play phase. Can be either a function
+                ignored. If a functional class is given it can also define
+                the value_range (int, int) attribute specifying the minimum
+                (loss) and maximum (win) value the function can return.
+            simulation_policy (function or str, optional): Function that will
+                be used to select the move that will be played in each state
+                of the self-play phase. Can be either a function
                     (actions: [object],
                     step_results: [(observation, reward, done, info)]) ->
                     selected_index: int,
@@ -424,8 +429,8 @@ class MonteCarloTree(Strategy):
                 takes MonteCarloTreeNode as its unique argument. It is up to
                 the caller to make sure that custom attributes are properly
                 created during node's construction.
-            best_node_policy (function or :obj:`str`, optional): Function that
-                will be used to select the returned action at the end of the
+            best_node_policy (function or str, optional): Function that will
+                be used to select the returned action at the end of the
                 algorithm. Can be either a function
                     (node: MonteCarloTreeNode) -> value: number
                 (node with highest value will be chosen), or a string
@@ -478,6 +483,19 @@ class MonteCarloTree(Strategy):
             self._best_node_policy_from_string(best_node_policy)
             if isinstance(best_node_policy, str)
             else best_node_policy
+        )
+
+        self._expected_value_range = (
+            self._selection_policy.value_range
+            if hasattr(self._selection_policy, 'value_range')
+            else None
+        )
+
+        self._observed_value_range = (
+            self._value_function.value_range
+            if self._value_function is not None and
+            hasattr(self._value_function, 'value_range')
+            else [-1, 1]
         )
 
         self.reset_tree = reset_tree
@@ -595,7 +613,8 @@ class MonteCarloTree(Strategy):
         actions = list(actions)
         children = list(children)
 
-        index = self._best_node_policy(root.children)
+        # index = self._best_node_policy(root.children)
+        index = self._best_node_policy(children)
         self._save_stats(root, i, time.time() - start)
         return index
 
@@ -647,8 +666,15 @@ class MonteCarloTree(Strategy):
         return reward
 
     def _backpropagate(self, node, reward):
-        # Use reward in [0, 1], where loss=0, draw=.5, win=1
-        reward = (reward + 1) / 2
+        # Translate reward if necessary
+        if self._expected_value_range is not None:
+            expected_min, expected_max = self._expected_value_range
+            observed_min, observed_max = self._observed_value_range
+            # We visualize observed range as if observed_min were 0 and
+            # observed max 1
+            t = (reward - observed_min) / (observed_max - observed_min)
+            # Then we set the same proportion in the expected range
+            reward = (1 - t) * expected_min + t * expected_max
         node.update(reward, self._update_function)
 
     @staticmethod
@@ -695,6 +721,8 @@ class UCT:
 
     """
 
+    value_range = [0, 1]
+
     def __init__(self, c):
         """
 
@@ -729,13 +757,28 @@ class OMC:
 
     """
 
-    # TODO fix infinities (or even remove)
+    value_range = [0, 1]
+    _eps = np.finfo(np.float32).eps
+
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
         sigma = np.sqrt([child.value_variance for child in children])
         best_value = values.max()
-        urgencies = sp.erfc((best_value - values) / (np.sqrt(2) * sigma))
+
+        value_diff = best_value - values
+        out = np.where(value_diff >= 0, np.inf, -np.inf)
+        # Divide a / b where sigma is not 0
+        # In those cases use +/-np.inf
+        # Then compute erfc (erfc(inf = 0))
+        urgencies = sp.erfc(np.divide(
+            value_diff,
+            np.sqrt(2) * sigma,
+            where=sigma != 0,
+            out=out,
+        ))
+        # Avoid having all urgencies = 0
+        urgencies += self._eps
         urg_sum = urgencies.sum()
         # Sum 1 to visits to avoid dividing by zero
         return np.argmax((root.visit_count * urgencies) /
@@ -757,7 +800,9 @@ class PBBM:
 
     """
 
-    # TODO fix infinities (or even remove)
+    value_range = [0, 1]
+    _eps = np.finfo(np.float32).eps
+
     def __call__(self, root, children):
         values = np.array([child.value for child in children])
         visits = np.array([child.visit_count for child in children])
@@ -765,8 +810,17 @@ class PBBM:
         best_node = np.argmax(values)
         best_value = values[best_node]
         best_sigma_sq = sigma_sq[best_node]
-        urgencies = np.exp(-2.4 * (best_value - values) /
-                           (np.sqrt(2 * (best_sigma_sq + sigma_sq))))
+
+        value_diff = -2.4 * (best_value - values)
+        sqrt = np.sqrt(2 * (best_sigma_sq + sigma_sq))
+        out = np.where(value_diff > 0, np.inf, -np.inf)
+        urgencies = np.exp(np.divide(
+            value_diff,
+            sqrt,
+            where=sqrt != 0,
+            out=out
+        ))
+        urgencies += self._eps
         urg_sum = urgencies.sum()
         # Sum 1 to visits to avoid dividing by zero
         return np.argmax((root.visit_count * urgencies) /
