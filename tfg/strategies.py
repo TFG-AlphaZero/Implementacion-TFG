@@ -432,14 +432,12 @@ class MonteCarloTree(Strategy):
             best_node_policy (function or str, optional): Function that will
                 be used to select the returned action at the end of the
                 algorithm. Can be either a function
-                    (node: MonteCarloTreeNode) -> value: number
-                (node with highest value will be chosen), or a string
-                representing the function to apply, one of the following:
-                {'robust', 'max', 'secure'}, where 'robust' returns the visit
-                count of the node, 'max' returns its value (computed by
-                backpropagation policy) and 'secure' returns the result of
-                the tfg.strategies.SecureChild formula with A=4. Defaults to
-                'robust'.
+                    (nodes: [MonteCarloTreeNode]) -> index: number
+                or a string representing the function to apply, one of the
+                following: {'robust', 'max', 'secure'}, where 'robust'
+                selects the node with higher visit count, 'max' the one with
+                highest value and 'secure' uses tfg.strategies.SecureChild
+                formula with A=4. Defaults to 'robust'.
             reset_tree (bool, optional): Whether to reset the game tree after
                 each call to move or keep it for the next call. Defaults to
                 True (reset). If set to False all moves must be reported via
@@ -589,6 +587,7 @@ class MonteCarloTree(Strategy):
                     reward = self._simulate(env) * player
                 else:
                     # Estimate via value_function
+                    # TODO check if we should multiply by the player or not
                     reward = self._value_function(current_node) * player
 
             # Backpropagation phase
@@ -616,7 +615,7 @@ class MonteCarloTree(Strategy):
         # index = self._best_node_policy(root.children)
         index = self._best_node_policy(children)
         self._save_stats(root, i, time.time() - start)
-        return index
+        return actions[index]
 
     def update(self, action):
         if not self.reset_tree:
@@ -637,9 +636,10 @@ class MonteCarloTree(Strategy):
         }
 
         self._stats = {
+            'value': root.value,
             'actions': actions,
             'iters': iterations,
-            'time': time_spent,
+            'time': time_spent
         }
 
     def _select(self, env, root):

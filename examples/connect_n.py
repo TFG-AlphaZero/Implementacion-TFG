@@ -20,6 +20,7 @@ class ConnectN(GameEnv):
         self.indices = None
         self._to_play = WHITE
         self._winner = None
+        self._moves = 0
         self.reset()
 
     @property
@@ -49,6 +50,7 @@ class ConnectN(GameEnv):
         if done:
             self._winner = reward
         self._to_play = to_play
+        self._moves += 1
         return self.board.copy(), reward, done, info
 
     def legal_actions(self):
@@ -63,6 +65,7 @@ class ConnectN(GameEnv):
         self.indices = np.zeros(shape=(self.action_space.n,), dtype=np.int8)
         self._to_play = WHITE
         self._winner = None
+        self._moves = 0
         return self.board.copy()
 
     def render(self, mode='human'):
@@ -79,12 +82,104 @@ class ConnectN(GameEnv):
         print(' ' + ' '.join(str(i) for i in range(cols)))
 
     def _check_action(self, action):
-        legal_actions = self.legal_actions()
-        if action not in legal_actions:
+        rows, _ = self.observation_space.shape
+        if self.indices[action] == rows:
             raise ValueError(f"found an illegal action {action}; "
-                             f"legal actions are {legal_actions}")
+                             f"legal actions are {self.legal_actions()}")
+
+    # TODO keep one
+    # def _check_board(self, board, i, j):
+    #     n = self._n
+    #     if self._moves < 2 * n - 1:
+    #         return 0, False
+    #
+    #     rows, cols = self.observation_space.shape
+    #     possible_winner = board[i, j]
+    #
+    #     c = 1
+    #     # Horizontal right
+    #     for k in range(j + 1, min(j + n, cols)):
+    #         if board[i, k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #     # Horizontal left
+    #     for k in range(j - 1, max(-1, j - n), -1):
+    #         if board[i, k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #
+    #     c = 1
+    #     # Vertical up
+    #     for k in range(i + 1, min(i + n, rows)):
+    #         if board[k, j] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #     # Vertical down
+    #     for k in range(i - 1, max(-1, i - n), -1):
+    #         if board[k, j] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #
+    #     c = 1
+    #     # Diagonal right-up
+    #     for k in range(1, n):
+    #         if i + k >= rows or j + k >= cols:
+    #             break
+    #         if board[i + k, j + k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #     # Diagonal left-down
+    #     for k in range(1, n):
+    #         if i - k < 0 or j - k < 0:
+    #             break
+    #         if board[i - k, j - k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #
+    #     c = 1
+    #     # Diagonal right-down
+    #     for k in range(1, n):
+    #         if i - k < 0 or j + k >= cols:
+    #             break
+    #         if board[i - k, j + k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #     # Diagonal left-up
+    #     for k in range(1, n):
+    #         if i + k >= rows or j - k < 0:
+    #             break
+    #         if board[i + k, j - k] != possible_winner:
+    #             break
+    #         c += 1
+    #         if c == n:
+    #             return possible_winner, True
+    #
+    #     # Move has not been counted yet
+    #     if self._moves == rows * cols - 1:
+    #         # Draw
+    #         return 0, True
+    #
+    #     return 0, False
 
     def _check_board(self, board, i, j):
+        n = self._n
+        if self._moves < 2 * n - 1:
+            return 0, False
+
         _, cols = self.observation_space.shape
         possible_winner = board[i, j]
 
@@ -122,6 +217,6 @@ class ConnectN(GameEnv):
 
 if __name__ == '__main__':
     game = ConnectN()
-    s1 = HumanStrategy(game)
-    s2 = MonteCarloTree(game, max_iter=100, reset_tree=False)
-    play(game, s1, s2, render=True, print_results=True)
+    s1 = MonteCarloTree(game, max_iter=800, reset_tree=False)
+    s2 = MonteCarloTree(game, max_iter=800, reset_tree=False)
+    play(game, s1, s2)

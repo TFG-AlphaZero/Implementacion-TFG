@@ -3,6 +3,7 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 
 import numpy as np
 import time
+import itertools
 import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, argmax, MonteCarloTree
@@ -58,6 +59,15 @@ class AlphaZero(Strategy):
         self.conv_filters = conv_filters
         self.conv_kernel_size = conv_kernel_size
         self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
+        # FIXME ahora no funciona con esto
+        #   Falla al crear el vector de probabilidades, pero igualmente
+        #   habría que especificar esto de otra forma.
+        #   Por ejemplo en el tres en raya igual nos conviene que la salida
+        #   sea de 3x3x1 para que coincida con juegos como el ajedrez (8x8x63)
+        #   y no que cada juego tenga una salida distinta.
+        #   Con esto lo que pasa es que quizá habría que transformar las
+        #   acciones de alguna forma, como por ejemplo pasar del 3x3x1 a 9 en
+        #   _value_function.
         self.output_dim = self._env.action_space.n
 
         self._selection_policy = QPlusU(self.c_puct)
@@ -70,7 +80,7 @@ class AlphaZero(Strategy):
             max_iter=self.mcts_times,
             selection_policy=self._selection_policy,
             value_function=self._value_function,
-            best_node_policy=self._best_node_policy
+            best_node_policy='robust'
         )
 
         self.buffer = []
@@ -125,27 +135,42 @@ class AlphaZero(Strategy):
             current_time = time.time()
 
     def _self_play(self, games=1, max_workers=None):
+        def make_policy(nodes):
+            # TODO add t stuff
+            t = 1
+            visit_vector = np.zeros(self._env.action_space.shape)
+            for action, node in nodes.items():
+                # We are assuming action is an int or a tuple
+                visit_vector[action] = node.visit_count
+
+            p = visit_vector ** (1 / t)
+            return p / p.sum()
+
         def _self_play_(g):
             buffer = []
 
             for _ in range(g):
-                observation = self.env.reset()
+                observation = self._env.reset()
                 self._best_node_policy.reset()
                 game_states_data = []
 
                 while True:
                     action = self.mcts.move(observation)
-                    game_states_data.append((observation, self._best_node_policy.pi))
-                    observation, _, done, _ = self.env.step(action)
+                    stats = self.mcts.stats
+                    pi = make_policy(stats['actions'])
+                    game_states_data.append((observation, pi))
+                    observation, _, done, _ = self._env.step(action)
 
                     if done:
                         break
 
                 perspective = 1
-                for i in range(len(game_states_data)-1, -1, -1) :
-                    game_states_data[i] += (perspective * self.env.winner(),)
+                # TODO turns may not switch every time
+                for i in range(len(game_states_data) - 1, -1, -1):
+                    game_states_data[i] += (perspective * self._env.winner(),)
                     perspective *= -1
-                buffer += game_states_data
+
+                buffer.extend(game_states_data)
 
             return buffer
 
@@ -159,9 +184,8 @@ class AlphaZero(Strategy):
             for i in range(r_games):
                 n_games[i] += 1
 
-        results = Parallel(max_workers)(delayed(_self_play_)(g) for g in n_games)
-        raise NotImplementedError
-        #return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
+        bufs = Parallel(max_workers)(delayed(_self_play_)(g) for g in n_games)
+        return list(itertools.chain.from_iterable(bufs))
 
     def move(self, observation):
         return self.mcts.move(observation)
@@ -179,8 +203,8 @@ class AlphaZero(Strategy):
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
 
-        for i in node.children:
-            node.children[i].probability = probabilities[i]
+        for i, child in node.children.items():
+            child.probability = probabilities[i]
 
         return reward
 
@@ -296,8 +320,9 @@ class BestNodePolicyAZ:
         # fun1 = lambda i: i**(1/t)
         # fun2 = np.vectorize(fun1)
 
-        sum = np.sum(visit_vector ** (1 / t))
-        self.pi = visit_vector / sum
+        p = visit_vector ** (1 / t)
+        sum = np.sum(p)
+        self.pi = p / sum
         # self.pi = [fun1(visits) / sum for visits in visit_vector]
 
         return np.argmax(self.pi)

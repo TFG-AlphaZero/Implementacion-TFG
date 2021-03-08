@@ -5,10 +5,12 @@ import tensorflow as tf
 import numpy as np
 import tfg.alphaZeroConfig as config
 
-from keras.models import Sequential, Model, load_model
-from keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU, Dense, Flatten, add, Activation
-from keras.optimizers import SGD, Adam, RMSprop
-from keras import regularizers
+from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.layers import (
+    Input, Conv2D, BatchNormalization,
+    LeakyReLU, Dense, Flatten, add, Activation)
+from tensorflow.keras.optimizers import SGD, Adam, RMSprop
+from tensorflow.keras import regularizers
 
 
 class NeuralNetworkAZ:
