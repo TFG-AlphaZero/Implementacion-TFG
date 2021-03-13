@@ -24,7 +24,6 @@ class AlphaZero(Strategy):
                  mcts_times=config.MCTS_TIMES,
                  self_play_times=config.SELF_PLAY_TIMES,
                  t_equals_one=config.T_EQUALS_ONE,
-                 epsilon=config.EPSILON,
                  batch_size=config.BATCH_SIZE,
                  learning_rate=config.LEARNING_RATE,
                  regularizer_constant=config.REGULARIZER_CONST,
@@ -48,7 +47,7 @@ class AlphaZero(Strategy):
         self.mcts_times = mcts_times
         self.self_play_times = self_play_times
         self.t_equals_one = t_equals_one
-        self.epsilon = epsilon
+        self.counter = t_equal_one
 
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -71,9 +70,6 @@ class AlphaZero(Strategy):
         self.output_dim = self._env.action_space.n
 
         self._selection_policy = QPlusU(self.c_puct)
-        self._best_node_policy = BestNodePolicyAZ(
-            self._env, self.t_equals_one, self.epsilon
-        )
 
         self.mcts = MonteCarloTree(
             self._env,
@@ -136,28 +132,41 @@ class AlphaZero(Strategy):
 
     def _self_play(self, games=1, max_workers=None):
         def make_policy(nodes):
-            # TODO add t stuff
-            t = 1
-            visit_vector = np.zeros(self._env.action_space.shape)
+            """Function used to generate the pi vector used to train AlphaZero's Neural Network.
+
+            pi(a|s) = N(s,a)^(1/t) / Sum_b N(s,b)^(1/t)
+            where t is a temperature parameter and b denotes all available actions at state s.
+
+            If t = 1, it means a high-level of exploration.
+            If t -> 0, it means a low exploration.
+            """
+
+            self.counter = max(0, self.counter - 1)
+            
+            visit_vector = np.zeros(self._env.action_space.n)
             for action, node in nodes.items():
-                # We are assuming action is an int or a tuple
+                # TODO We are assuming action is an int or a tuple, check when generalizing
                 visit_vector[action] = node.visit_count
 
-            p = visit_vector ** (1 / t)
-            return p / p.sum()
+            if self.counter > 0 : # t = 1
+                return visit_vector / visit_vector.sum() 
+            else : # t -> 0
+                index = np.argmax(visit_vector)
+                pi = np.zeros(visit_vector.size)
+                pi[index] = 1
+                return pi
 
         def _self_play_(g):
             buffer = []
 
             for _ in range(g):
                 observation = self._env.reset()
-                self._best_node_policy.reset()
                 game_states_data = []
+                self.counter = self.t_equal_one
 
                 while True:
                     action = self.mcts.move(observation)
-                    stats = self.mcts.stats
-                    pi = make_policy(stats['actions'])
+                    pi = make_policy(self.mcts.stats['actions'])
                     game_states_data.append((observation, pi))
                     observation, _, done, _ = self._env.step(action)
 
@@ -165,7 +174,7 @@ class AlphaZero(Strategy):
                         break
 
                 perspective = 1
-                # TODO turns may not switch every time
+                # TODO turns may not switch every time, check when generalizing
                 for i in range(len(game_states_data) - 1, -1, -1):
                     game_states_data[i] += (perspective * self._env.winner(),)
                     perspective *= -1
@@ -258,74 +267,3 @@ class QPlusU:
         )
 
         return np.argmax(q_param + u_param)
-
-
-class BestNodePolicyAZ:
-    """Class representing the Best Node Policy used by AlphaZero.
-    
-    It is used at the end of MCTS algorithm to select the returned action.
-    Selects the child which maximises:
-    pi(a|s) = N(s,a)^(1/t) / Sum_b N(s,b)^(1/t)
-    where t -> 0 is a temperature parameter and b denotes the available action
-    at state s.
-
-    If t = 1, this means a high-level of exploration.
-    If t -> 0, this means a low exploration.
-
-    When playing a real game with an opponent, the temperature is set to t -> 0
-    all the time.
-    
-    It is a functional class: ([MonteCarloTreeNode]) -> [int] which returns
-    pi(a|s) for each action
-    """
-
-    def __init__(self, env, t_equals_one, epsilon):
-        """
-        TODO
-        Args:
-            env ():
-            t_equals_one (int): Times that t = 1. When called for the
-            (t_equal_one) th time, it will become t -> 0.
-            epsilon ():
-
-        """
-
-        self._env = env
-        self.t_equals_one = t_equals_one
-        self.counter = t_equals_one
-        self.epsilon = epsilon
-        self.pi = None
-
-    def __call__(self, nodes):
-        # TODO Recordar cambiar esto! Es para que no pete. Ademas, tenemos el
-        #       problema de como hacer reset cuando jugamos varios juegos.
-        t = 1
-        # FIXME Peta overflow si hago el t mas pequeno o visit_count se hace > 3
-        # t = 1 if self.counter > 0 else self.epsilon
-        self.counter = max(0, self.counter - 1)
-
-        """visit_vector = []
-        for action in range(self._env.action_space.n): #Hay que cambiarlo
-            if action in nodes:
-                visit_vector.append(nodes[action].visit_count)
-            else:
-                visit_vector.append(0)"""
-
-        visit_vector = np.zeros(self._env.action_space.shape)
-        # TODO esto probablemente mejor fuera que aquí no pega mucho
-        for action, node in nodes.items():
-            # We are assuming action is an int or a tuple
-            visit_vector[action] = node.visit_count
-
-        # fun1 = lambda i: i**(1/t)
-        # fun2 = np.vectorize(fun1)
-
-        p = visit_vector ** (1 / t)
-        sum = np.sum(p)
-        self.pi = p / sum
-        # self.pi = [fun1(visits) / sum for visits in visit_vector]
-
-        return np.argmax(self.pi)
-    
-    def reset(self):
-        self.counter = self.t_equals_one

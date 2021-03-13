@@ -21,3 +21,4 @@ if __name__ == '__main__':
     play(game, Minimax(game), alphaZero, render=True, print_results=True)
     results = play(game, Minimax(game), alphaZero, games=10)
     print(results)
+    

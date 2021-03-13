@@ -185,7 +185,6 @@ class NeuralNetworkAZ:
     def load_model(self, path):
         self.model = load_model(path)
 
-
 """
 #Example of use provided below!
 
@@ -210,7 +209,7 @@ train_X = np.array([sample_1])
 train_Y = np.array([-1])
 train_Z = np.array([[1,0,0,0,0,0,0,0,0]])
 
-nn_test.fit(X = train_X, Y = [train_Y, train_Z], batch_size = 1, epochs = 10, verbose = 2, validation_split = 0)
-predictions = nn_test.predict(X = train_X)
+nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = 1, epochs = 10, verbose = 2, validation_split = 0)
+predictions = nn_test.predict(x = train_X)
 print(predictions)
 """
