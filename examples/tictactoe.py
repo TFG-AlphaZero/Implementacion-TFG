@@ -60,7 +60,7 @@ class TicTacToe(GameEnv):
         tokens = [[mapping[cell] for cell in row] for row in self.board]
         print("\n-+-+-\n".join(
             ['|'.join([token for token in row]) for row in tokens]
-        ))
+        )+'\n')
 
     @staticmethod
     def _parse_action(action):

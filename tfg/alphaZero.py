@@ -4,6 +4,7 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 import numpy as np
 import time
 import itertools
+import random
 import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, argmax, MonteCarloTree
@@ -47,7 +48,7 @@ class AlphaZero(Strategy):
         self.mcts_times = mcts_times
         self.self_play_times = self_play_times
         self.t_equals_one = t_equals_one
-        self.counter = t_equal_one
+        self.counter = self.t_equals_one
 
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -113,9 +114,10 @@ class AlphaZero(Strategy):
         error = 1
 
         while keep_iterating():
-            self.buffer.append(self._self_play(games=self.self_play_times))
-
-            x, y, z = zip(*self.buffer)
+            self.buffer.extend(self._self_play(games=self.self_play_times))
+            mini_batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
+            
+            x, y, z = zip(*mini_batch)
             x_train = np.array([
                 self._convert_to_network_input(obs) for obs in list(x)]
             )
@@ -123,7 +125,7 @@ class AlphaZero(Strategy):
             train_reward = np.array(list(z))
 
             self.neural_network.fit(x=x_train, y=[train_reward, train_prob],
-                                    batch_size=self.batch_size,
+                                    batch_size=32,
                                     epochs=self.epochs,
                                     verbose=2,
                                     validation_split=0)
@@ -162,7 +164,7 @@ class AlphaZero(Strategy):
             for _ in range(g):
                 observation = self._env.reset()
                 game_states_data = []
-                self.counter = self.t_equal_one
+                self.counter = self.t_equals_one
 
                 while True:
                     action = self.mcts.move(observation)
