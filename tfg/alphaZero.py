@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import collections
 import time
 import itertools
 import random
@@ -10,7 +11,7 @@ import tfg.alphaZeroConfig as config
 from tfg.strategies import Strategy, argmax, MonteCarloTree
 from tfg.util import play
 from tfg.alphaZeroNN import NeuralNetworkAZ
-
+from joblib import Parallel, delayed
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
@@ -25,6 +26,8 @@ class AlphaZero(Strategy):
                  mcts_times=config.MCTS_TIMES,
                  self_play_times=config.SELF_PLAY_TIMES,
                  t_equals_one=config.T_EQUALS_ONE,
+                 buffer_size = config.BUFFER_SIZE,
+                 max_workers = config.MAX_WORKERS,
                  batch_size=config.BATCH_SIZE,
                  learning_rate=config.LEARNING_RATE,
                  regularizer_constant=config.REGULARIZER_CONST,
@@ -48,7 +51,9 @@ class AlphaZero(Strategy):
         self.mcts_times = mcts_times
         self.self_play_times = self_play_times
         self.t_equals_one = t_equals_one
-        self.counter = self.t_equals_one
+        self.counter = t_equals_one
+        self.buffer_size = buffer_size
+        self.max_workers = max_workers
 
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -80,7 +85,8 @@ class AlphaZero(Strategy):
             best_node_policy='robust'
         )
 
-        self.buffer = []
+        self.buffer = collections.deque(maxlen=self.buffer_size)
+        
         self.neural_network = NeuralNetworkAZ(
             learning_rate=self.learning_rate,
             regularizer_constant=self.regularizer_constant,
@@ -114,7 +120,8 @@ class AlphaZero(Strategy):
         error = 1
 
         while keep_iterating():
-            self.buffer.extend(self._self_play(games=self.self_play_times))
+            self.buffer.extend(self._self_play(games=self.self_play_times, max_workers=self.max_workers))
+
             mini_batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
             
             x, y, z = zip(*mini_batch)
@@ -171,6 +178,7 @@ class AlphaZero(Strategy):
                     pi = make_policy(self.mcts.stats['actions'])
                     game_states_data.append((observation, pi))
                     observation, _, done, _ = self._env.step(action)
+                    self.mcts.update(action)
 
                     if done:
                         break
@@ -195,11 +203,14 @@ class AlphaZero(Strategy):
             for i in range(r_games):
                 n_games[i] += 1
 
-        bufs = Parallel(max_workers)(delayed(_self_play_)(g) for g in n_games)
+        bufs = Parallel(max_workers, backend = 'threading')(delayed(_self_play_)(g) for g in n_games)
         return list(itertools.chain.from_iterable(bufs))
 
     def move(self, observation):
         return self.mcts.move(observation)
+
+    def update(self, action):
+        return self.mcts.update(action)
 
     def save(self, path):
         self.neural_network.save_model(path)
