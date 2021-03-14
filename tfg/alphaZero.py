@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import copy
 import collections
 import time
 import itertools
@@ -26,8 +27,8 @@ class AlphaZero(Strategy):
                  mcts_times=config.MCTS_TIMES,
                  self_play_times=config.SELF_PLAY_TIMES,
                  t_equals_one=config.T_EQUALS_ONE,
-                 buffer_size = config.BUFFER_SIZE,
-                 max_workers = config.MAX_WORKERS,
+                 buffer_size=config.BUFFER_SIZE,
+                 max_workers=config.MAX_WORKERS,
                  batch_size=config.BATCH_SIZE,
                  learning_rate=config.LEARNING_RATE,
                  regularizer_constant=config.REGULARIZER_CONST,
@@ -120,9 +121,11 @@ class AlphaZero(Strategy):
         error = 1
 
         while keep_iterating():
-            self.buffer.extend(self._self_play(games=self.self_play_times, max_workers=self.max_workers))
+            self.buffer.extend(self._self_play(games=self.self_play_times,
+                                               max_workers=self.max_workers))
 
-            mini_batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
+            mini_batch = random.sample(self.buffer,
+                                       min(len(self.buffer), self.batch_size))
             
             x, y, z = zip(*mini_batch)
             x_train = np.array([
@@ -140,45 +143,51 @@ class AlphaZero(Strategy):
             current_time = time.time()
 
     def _self_play(self, games=1, max_workers=None):
-        def make_policy(nodes):
-            """Function used to generate the pi vector used to train AlphaZero's Neural Network.
+        def make_policy(env, nodes):
+            """Function used to generate the pi vector used to train AlphaZero's
+                Neural Network.
 
-            pi(a|s) = N(s,a)^(1/t) / Sum_b N(s,b)^(1/t)
-            where t is a temperature parameter and b denotes all available actions at state s.
+                pi(a|s) = N(s,a)^(1/t) / Sum_b N(s,b)^(1/t)
+                where t is a temperature parameter and b denotes all available
+                actions at state s.
 
-            If t = 1, it means a high-level of exploration.
-            If t -> 0, it means a low exploration.
+                If t = 1, it means a high level of exploration.
+                If t -> 0, it means a low exploration.
+
             """
 
             self.counter = max(0, self.counter - 1)
             
-            visit_vector = np.zeros(self._env.action_space.n)
+            visit_vector = np.zeros(env.action_space.n)
             for action, node in nodes.items():
-                # TODO We are assuming action is an int or a tuple, check when generalizing
+                # TODO We are assuming action is an int or a tuple,
+                #  check when generalizing
                 visit_vector[action] = node.visit_count
 
-            if self.counter > 0 : # t = 1
+            if self.counter > 0:
+                # t = 1
                 return visit_vector / visit_vector.sum() 
-            else : # t -> 0
+            else:
+                # t -> 0
                 index = np.argmax(visit_vector)
                 pi = np.zeros(visit_vector.size)
                 pi[index] = 1
                 return pi
 
-        def _self_play_(g):
+        def _self_play_(g, env, mcts):
             buffer = []
 
             for _ in range(g):
-                observation = self._env.reset()
+                observation = env.reset()
                 game_states_data = []
                 self.counter = self.t_equals_one
 
                 while True:
-                    action = self.mcts.move(observation)
-                    pi = make_policy(self.mcts.stats['actions'])
+                    action = mcts.move(observation)
+                    pi = make_policy(env, mcts.stats['actions'])
                     game_states_data.append((observation, pi))
-                    observation, _, done, _ = self._env.step(action)
-                    self.mcts.update(action)
+                    observation, _, done, _ = env.step(action)
+                    mcts.update(action)
 
                     if done:
                         break
@@ -186,7 +195,7 @@ class AlphaZero(Strategy):
                 perspective = 1
                 # TODO turns may not switch every time, check when generalizing
                 for i in range(len(game_states_data) - 1, -1, -1):
-                    game_states_data[i] += (perspective * self._env.winner(),)
+                    game_states_data[i] += (perspective * env.winner(),)
                     perspective *= -1
 
                 buffer.extend(game_states_data)
@@ -194,7 +203,7 @@ class AlphaZero(Strategy):
             return buffer
 
         if max_workers is None:
-            return _self_play_(games)
+            return _self_play_(games, self._env, self.mcts)
 
         d_games = games // max_workers
         r_games = games % max_workers
@@ -203,14 +212,26 @@ class AlphaZero(Strategy):
             for i in range(r_games):
                 n_games[i] += 1
 
-        bufs = Parallel(max_workers, backend = 'threading')(delayed(_self_play_)(g) for g in n_games)
+        envs = [copy.deepcopy(self._env) for _ in range(max_workers)]
+        mctss = [MonteCarloTree(
+            env,
+            max_iter=self.mcts_times,
+            selection_policy=self._selection_policy,
+            value_function=self._value_function,
+            best_node_policy='robust'
+        ) for env in envs]
+        args = zip(n_games, envs, mctss)
+
+        bufs = Parallel(max_workers, backend='threading')(
+            delayed(_self_play_)(g, env, mcts) for g, env, mcts in args
+        )
         return list(itertools.chain.from_iterable(bufs))
 
     def move(self, observation):
         return self.mcts.move(observation)
 
     def update(self, action):
-        return self.mcts.update(action)
+        self.mcts.update(action)
 
     def save(self, path):
         self.neural_network.save_model(path)
