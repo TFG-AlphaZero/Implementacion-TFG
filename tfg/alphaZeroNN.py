@@ -52,8 +52,8 @@ class NeuralNetworkAZ:
                       # TODO deberiamos llamar a nuestra funcion
                       #  self._softmax_cross_entropy -> peta
                       loss={
-                          'value_head': 'mean_squared_error',
-                          'policy_head': 'categorical_crossentropy'
+                          'value_head': tf.keras.losses.MeanSquaredError(),
+                          'policy_head': tf.keras.losses.CategoricalCrossentropy()
                       },
                       loss_weights={'value_head': 0.5, 'policy_head': 0.5})
 
@@ -160,16 +160,19 @@ class NeuralNetworkAZ:
 
     # FIXME not working properly
     @staticmethod
-    def _softmax_cross_entropy(y, y_predicted):
-        pi = y
-        prob = y_predicted
-        
-        zero = tf.zeros(shape=tf.shape(pi), dtype=tf.float32)
+    def _softmax_cross_entropy(self, y_true, y_predicted):
+        p = y_predicted
+        pi = y_true
+
+        zero = tf.zeros(shape = tf.shape(pi), dtype=tf.float32)
         where = tf.equal(pi, zero)
-        negatives = tf.fill(tf.shape(pi), -100.0)
-        prob = tf.where(where, negatives, prob)
-        
-        return tf.nn.softmax_cross_entropy_with_logits(labels=pi, logits=prob)
+
+        negatives = tf.fill(tf.shape(pi), -100.0) 
+        p = tf.where(where, negatives, p)
+
+        loss = tf.nn.softmax_cross_entropy_with_logits(labels = pi, logits = p)
+
+        return loss
     
     # def fit(self, x, y, batch_size, epochs, verbose, validation_split):
     def fit(self, *args, **kwargs):
@@ -207,11 +210,12 @@ second_player = np.array([[0,0,0],
                           [0,0,1]])
 sample_1 = np.reshape(np.append(first_player, second_player), input_dimension)
 
-train_X = np.array([sample_1])
-train_Y = np.array([-1])
-train_Z = np.array([[1,0,0,0,0,0,0,0,0]])
+train_X = np.array([sample_1, sample_1])
+train_Y = np.array([-1, -1])
+train_Z = np.array([[1,0,0,0,0,0,0,0,0], [1,0,0,0,0,0,0,0,0]])
 
-nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = 1, epochs = 10, verbose = 2, validation_split = 0)
+nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = 1, epochs = 100, verbose = 2, validation_split = 0.5)
 predictions = nn_test.predict(x = train_X)
-print(predictions)
+
+print(train_Z[0], predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """
