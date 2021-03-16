@@ -204,7 +204,7 @@ output_dimension = 9
 nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM,
                           input_dim = input_dimension, output_dim = output_dimension, 
                           residual_layers=config.RESIDUAL_LAYERS, filters = config.CONV_FILTERS, kernel_size=config.CONV_KERNEL_SIZE)
-#nn_test.model.summary()
+nn_test.model.summary()
 #tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
 
 
@@ -222,7 +222,7 @@ train_X = np.array([sample_1 for i in range(b_size)])
 train_Y = np.array([-1 for i in range(b_size)])
 train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)])
 
-nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
-predictions = nn_test.predict(x = train_X)
+#nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
+#predictions = nn_test.predict(x = train_X)
 print(tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """

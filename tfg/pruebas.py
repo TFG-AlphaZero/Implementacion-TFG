@@ -23,14 +23,14 @@ if __name__ == '__main__':
     game = TicTacToe()
 
     alphaZero = AlphaZero(game)
-    alphaZero.load('models/TicTacToeDemo.h5')
+    #alphaZero.load('models/TicTacToeDemo.h5')
     #alphaZero.train()
     #alphaZero.save('models/TicTacToeDemoV2.h5')
 
-    #play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
+    play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
 
-    results = play(game, Minimax(game), alphaZero, games=10)
-    print(results)
+    #results = play(game, Minimax(game), alphaZero, games=10)
+    #print(results)
     
     #results = play(game, alphaZero, Minimax(game), games = 10)
     #print(results)
