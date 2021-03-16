@@ -1,16 +1,11 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import numpy as np
 import tensorflow as tf
-import tfg.alphaZeroConfig as config
 
-from gym.spaces import Discrete, Box
-from tfg.games import GameEnv, WHITE, BLACK
-from tfg.strategies import MonteCarloTree, HumanStrategy, Minimax, MonteCarloTreeNode
+from tfg.strategies import Minimax
 from tfg.util import play
 from tfg.alphaZero import AlphaZero
-from examples.connect_n import ConnectN
 from examples.tictactoe import TicTacToe
 
 
@@ -34,5 +29,3 @@ if __name__ == '__main__':
     
     #results = play(game, alphaZero, Minimax(game), games = 10)
     #print(results)
-
-    
