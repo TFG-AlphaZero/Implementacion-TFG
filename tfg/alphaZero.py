@@ -9,95 +9,66 @@ import itertools
 import random
 import tfg.alphaZeroConfig as config
 
-from tfg.strategies import Strategy, argmax, MonteCarloTree
-from tfg.util import play
+from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
 from joblib import Parallel, delayed
+
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
 
-    # TODO podemos crear una clase Config o algo así y se le pasa directamente
-    #       en vez de tantos parámetros aquí
-    #       Para los que sean que se pasen a MCTS o así también se puede usar
-    #       **kwags (por ejemplo si se le quiere dar un max_time o algo así)
-    def __init__(self,
-                 env,
+    # TODO add custom action/observation encoders/decoders
+    def __init__(self, env,
                  c_puct=config.C_PUCT,
                  mcts_times=config.MCTS_TIMES,
-                 self_play_times=config.SELF_PLAY_TIMES,
-                 t_equals_one=config.T_EQUALS_ONE,
+                 mcts_max_time=config.MCTS_MAX_TIME,
                  buffer_size=config.BUFFER_SIZE,
-                 max_workers=config.MAX_WORKERS,
-                 batch_size=config.BATCH_SIZE,
-                 learning_rate=config.LEARNING_RATE,
-                 regularizer_constant=config.REGULARIZER_CONST,
-                 momentum=config.MOMENTUM,
-                 epochs=config.EPOCHS,
-                 residual_layers=config.RESIDUAL_LAYERS,
-                 conv_filters=config.CONV_FILTERS,
-                 conv_kernel_size=config.CONV_KERNEL_SIZE):
-        """
+                 nn_config=None):
+        """All default values are taken from tfg.alphaZeroConfig
 
         Args:
-            Me da pereza escribirlos todos xd
-
+            env (tfg.games.GameEnv): Game this strategy is for.
+            c_puct (float): C constant used in the selection policy PUCT
+                algorithm.
+            mcts_times (int): Max iterations of the MCTS algorithm.
+            mcts_max_time (float): Max time for the MCTS algorithm.
+            buffer_size (int): Max number of states that can be stored before
+                training. If this maximum is reached, old states will be
+                removed when adding new ones.
+            nn_config (tfg.alphaZeroConfig.AlphaZeroConfig or dict):
+                Wrapper with arguments that will be directly passed to
+                tfg.alphaZeroNN.AlphaZeroNN. If output_dim is None,
+                env.action_space.n will be used instead.
         """
+        if nn_config is None:
+            nn_config = config.AlphaZeroConfig()
+        elif isinstance(nn_config, dict):
+            nn_config = config.AlphaZeroConfig(**nn_config)
 
         self._env = env
-        # TODO Quizas sea innecesario guardar todos estos parametros y
-        #       enchufarlos directamente al mcts y neural network sin guardarlos
-        #       en atributos.
-        self.c_puct = c_puct
-        self.mcts_times = mcts_times
-        self.self_play_times = self_play_times
-        self.t_equals_one = t_equals_one
-        self.counter = t_equals_one
-        self.buffer_size = buffer_size
-        self.max_workers = max_workers
-
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.regularizer_constant = regularizer_constant
-        self.momentum = momentum
-        self.epochs = epochs
-        self.residual_layers = residual_layers
-        self.conv_filters = conv_filters
-        self.conv_kernel_size = conv_kernel_size
-        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
-        # FIXME ahora no funciona con esto
-        #   Falla al crear el vector de probabilidades, pero igualmente
-        #   habría que especificar esto de otra forma.
-        #   Por ejemplo en el tres en raya igual nos conviene que la salida
-        #   sea de 3x3x1 para que coincida con juegos como el ajedrez (8x8x63)
-        #   y no que cada juego tenga una salida distinta.
-        #   Con esto lo que pasa es que quizá habría que transformar las
-        #   acciones de alguna forma, como por ejemplo pasar del 3x3x1 a 9 en
-        #   _value_function.
-        self.output_dim = self._env.action_space.n
-
-        self._selection_policy = QPlusU(self.c_puct)
-
-        self.mcts = MonteCarloTree(
-            self._env,
-            max_iter=self.mcts_times,
-            selection_policy=self._selection_policy,
+        self.mcts_kwargs = dict(
+            max_iter=mcts_times,
+            max_time=mcts_max_time,
+            selection_policy=QPlusU(c_puct),
             value_function=self._value_function,
             best_node_policy='robust',
             reset_tree=False
         )
 
-        self.buffer = collections.deque(maxlen=self.buffer_size)
+        # FIXME we shouldn't use config here
+        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
+
+        self._mcts = MonteCarloTree(self._env, **self.mcts_kwargs)
+
+        self._buffer = collections.deque(maxlen=buffer_size)
+
+        if nn_config.output_dim is None:
+            # Try using same output dim as action space size
+            nn_config.output_dim = self._env.action_space.n
         
         self.neural_network = NeuralNetworkAZ(
-            learning_rate=self.learning_rate,
-            regularizer_constant=self.regularizer_constant,
-            momentum=self.momentum,
             input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            residual_layers=self.residual_layers,
-            filters=self.conv_filters,
-            kernel_size=self.conv_kernel_size
+            **nn_config.__dict__
         )
 
     @property
@@ -105,10 +76,15 @@ class AlphaZero(Strategy):
         """tfg.games.GameEnv: Game this strategy is for."""
         return self._env
 
-    def train(self, max_train_time=config.MAX_TRAIN_TIME,
-              max_train_error=config.MAX_TRAIN_ERROR):
+    def train(self, self_play_times=config.SELF_PLAY_TIMES,
+              max_train_time=config.MAX_TRAIN_TIME,
+              max_train_error=config.MAX_TRAIN_ERROR,
+              max_workers=config.MAX_WORKERS,
+              epochs=config.EPOCHS,
+              batch_size=config.BATCH_SIZE,
+              t_equals_one=config.T_EQUALS_ONE):
         """
-
+        TODO
         """
         def keep_iterating():
             result = True
@@ -122,11 +98,12 @@ class AlphaZero(Strategy):
         error = 1
 
         while keep_iterating():
-            self.buffer.extend(self._self_play(games=self.self_play_times,
-                                               max_workers=self.max_workers))
+            self._buffer.extend(
+                self._self_play(self_play_times, max_workers, t_equals_one)
+            )
 
-            mini_batch = random.sample(self.buffer,
-                                       min(len(self.buffer), self.batch_size))
+            size = min(len(self._buffer), batch_size)
+            mini_batch = random.sample(self._buffer, size)
             
             x, y, z = zip(*mini_batch)
             x_train = np.array([
@@ -137,14 +114,14 @@ class AlphaZero(Strategy):
 
             self.neural_network.fit(x=x_train, y=[train_reward, train_prob],
                                     batch_size=32,
-                                    epochs=self.epochs,
+                                    epochs=epochs,
                                     verbose=2,
                                     validation_split=0)
 
             current_time = time.time()
 
-    def _self_play(self, games=1, max_workers=None):
-        def make_policy(env, nodes):
+    def _self_play(self, games, max_workers, t_equals_one):
+        def make_policy(env, nodes, counter):
             """Function used to generate the pi vector used to train AlphaZero's
                 Neural Network.
 
@@ -156,8 +133,6 @@ class AlphaZero(Strategy):
                 If t -> 0, it means a low exploration.
 
             """
-
-            self.counter = max(0, self.counter - 1)
             
             visit_vector = np.zeros(env.action_space.n)
             for action, node in nodes.items():
@@ -165,7 +140,7 @@ class AlphaZero(Strategy):
                 #  check when generalizing
                 visit_vector[action] = node.visit_count
 
-            if self.counter > 0:
+            if counter > 0:
                 # t = 1
                 return visit_vector / visit_vector.sum() 
             else:
@@ -181,11 +156,12 @@ class AlphaZero(Strategy):
             for _ in range(g):
                 observation = env.reset()
                 game_states_data = []
-                self.counter = self.t_equals_one
+                counter = t_equals_one
 
                 while True:
                     action = mcts.move(observation)
-                    pi = make_policy(env, mcts.stats['actions'])
+                    counter = max(0, counter - 1)
+                    pi = make_policy(env, mcts.stats['actions'], counter)
                     game_states_data.append((observation, pi))
                     observation, _, done, _ = env.step(action)
                     mcts.update(action)
@@ -203,8 +179,9 @@ class AlphaZero(Strategy):
 
             return buffer
 
+        # TODO mover esto a la función anterior
         if max_workers is None:
-            return _self_play_(games, self._env, self.mcts)
+            return _self_play_(games, self._env, self._mcts)
 
         d_games = games // max_workers
         r_games = games % max_workers
@@ -214,13 +191,7 @@ class AlphaZero(Strategy):
                 n_games[i] += 1
 
         envs = [copy.deepcopy(self._env) for _ in range(max_workers)]
-        mctss = [MonteCarloTree(
-            env,
-            max_iter=self.mcts_times,
-            selection_policy=self._selection_policy,
-            value_function=self._value_function,
-            best_node_policy='robust'
-        ) for env in envs]
+        mctss = [MonteCarloTree(env, **self.mcts_kwargs) for env in envs]
         args = zip(n_games, envs, mctss)
 
         bufs = Parallel(max_workers, backend='threading')(
@@ -229,10 +200,10 @@ class AlphaZero(Strategy):
         return list(itertools.chain.from_iterable(bufs))
 
     def move(self, observation):
-        return self.mcts.move(observation)
+        return self._mcts.move(observation)
 
     def update(self, action):
-        self.mcts.update(action)
+        self._mcts.update(action)
 
     def save(self, path):
         self.neural_network.save_model(path)
