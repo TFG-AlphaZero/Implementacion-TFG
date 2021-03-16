@@ -187,8 +187,9 @@ class NeuralNetworkAZ:
         return self.model.fit(*args, **kwargs)
 
     def predict(self, x):
-        return self.model.predict(x)
-    
+        #return self.model.predict(x)
+        return self.model(x, training = False) #Much faster for small inputs
+
     def save_model(self, path):
         self.model.save(path)
 
