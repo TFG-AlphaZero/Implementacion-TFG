@@ -3,11 +3,10 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 
 import tensorflow as tf
 
-from tfg.strategies import Minimax
+from tfg.strategies import Minimax, HumanStrategy
 from tfg.util import play
 from tfg.alphaZero import AlphaZero
-from examples.tictactoe import TicTacToe
-
+from game.tictactoe import TicTacToe
 
 # GPU didn't work otherwise
 gpus = tf.config.list_physical_devices('GPU')
