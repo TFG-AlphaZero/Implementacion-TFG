@@ -309,8 +309,9 @@ class MonteCarloTreeNode(dict):
         """
         actions = env.legal_actions()
         for action in actions:
-            observation, _, _, info = env.step(action, fake=True)
-            to_play = info['to_play']
+            env_ = copy.deepcopy(env)
+            observation, _, _, info = env_.step(action)
+            to_play = env_.to_play
             node = MonteCarloTreeNode(observation, to_play)
             if update_fun is not None:
                 update_fun(node)
@@ -344,7 +345,6 @@ class MonteCarloTreeNode(dict):
         return hash((self.observation, self.to_play))
 
 
-# TODO check if those are the correct papers
 class MonteCarloTree(Strategy):
     """Game strategy (policy) implementing Monte Carlo Tree Search algorithm
 
@@ -357,9 +357,8 @@ class MonteCarloTree(Strategy):
                         given selection_policy until it encounters a
                         non-expanded node.
     2. Expansion:       add all children of the non-expanded node to the tree.
-    3. Simulation:      self-play the rest of the game using the
-                        simulation_policy (only if value_function has not
-                        been set).
+    3. Simulation:      self-play the rest of the game randomly (only if
+                        value_function has not been set).
     4. Backpropagation: knowing the result of the game (the reward), update the
                         value and other stats of every node in the path between
                         the root and the expanded node using the
@@ -373,7 +372,6 @@ class MonteCarloTree(Strategy):
     def __init__(self, env, max_iter=None, max_time=None,
                  selection_policy=None,
                  value_function=None,
-                 simulation_policy=None,
                  update_function=None,
                  best_node_policy=None,
                  reset_tree=True):
@@ -415,14 +413,6 @@ class MonteCarloTree(Strategy):
                 ignored. If a functional class is given it can also define
                 the value_range (int, int) attribute specifying the minimum
                 (loss) and maximum (win) value the function can return.
-            simulation_policy (function or str, optional): Function that will
-                be used to select the move that will be played in each state
-                of the self-play phase. Can be either a function
-                    (actions: [object],
-                    step_results: [(observation, reward, done, info)]) ->
-                    selected_index: int,
-                or a string  representing the  function to apply, one of the
-                following: {'random'}. Defaults to 'random'.
             update_function (function, optional): Function that will be used
                 to update the value of custom statistics of each node during
                 node creation and backpropagation. Must be a void function that
@@ -451,9 +441,6 @@ class MonteCarloTree(Strategy):
         if selection_policy is None:
             selection_policy = 'uct'
 
-        if simulation_policy is None:
-            simulation_policy = 'random'
-
         if best_node_policy is None:
             best_node_policy = 'robust'
 
@@ -468,12 +455,6 @@ class MonteCarloTree(Strategy):
         )
 
         self._value_function = value_function
-
-        self._simulation_policy = (
-            self._simulation_policy_from_string(simulation_policy)
-            if isinstance(simulation_policy, str)
-            else simulation_policy
-        )
 
         self._update_function = update_function
 
@@ -650,18 +631,14 @@ class MonteCarloTree(Strategy):
         index = self._selection_policy(root, children)
         return children[index], legal_actions[index]
 
-    def _simulate(self, env):
+    @staticmethod
+    def _simulate(env):
         winner = env.winner()
         done = winner is not None
         reward = 0 if not done else winner
         # Simulate until the end of the game
         while not done:
-            legal_actions = env.legal_actions()
-            step_results = [env.step(action, fake=True)
-                            for action in legal_actions]
-            index = self._simulation_policy(legal_actions, step_results)
-            action = legal_actions[index]
-            # Take the actual step
+            action = np.random.choice(env.legal_actions())
             _, reward, done, _ = env.step(action)
         return reward
 
@@ -688,13 +665,6 @@ class MonteCarloTree(Strategy):
             return OMC()
         elif string == 'pbbm':
             return PBBM()
-        return None
-
-    @staticmethod
-    def _simulation_policy_from_string(string):
-        string = string.lower()
-        if string == 'random':
-            return lambda acts, step_results: np.random.choice(len(acts))
         return None
 
     @staticmethod

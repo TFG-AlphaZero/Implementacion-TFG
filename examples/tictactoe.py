@@ -19,6 +19,7 @@ class TicTacToe(GameEnv):
         self.board = None
         self._to_play = 0
         self._winner = None
+        self._move_count = 0
         self.reset()
 
     @property
@@ -31,28 +32,24 @@ class TicTacToe(GameEnv):
     def winner(self):
         return self._winner
 
-    def step(self, action, fake=False):
-        self._check_action(action)
+    def step(self, action):
         i, j = self._parse_action(action)
-        board = self.board.copy()
-        board[i, j] = self._to_play
-        reward, done = self._check_board(board, i, j)
-        to_play = -self._to_play
-        info = {'to_play': to_play}
+        self._check_action(i, j)
+        self.board[i, j] = self._to_play
+        self._move_count += 1
+        reward, done = self._check_board(i, j)
 
-        if fake:
-            return board, reward, done, info
-
-        self.board = board
         if done:
             self._winner = reward
-        self._to_play = to_play
+        self._to_play *= -1
+        info = {'to_play': self._to_play, 'winner': self._winner}
         return self.board.copy(), reward, done, info
 
     def reset(self):
         self.board = np.zeros(shape=(3, 3))
         self._to_play = WHITE
         self._winner = None
+        self._move_count = 0
         return self.board.copy()
 
     def render(self, mode='human'):
@@ -68,31 +65,33 @@ class TicTacToe(GameEnv):
         column = action % 3
         return row, column
 
-    def _check_action(self, action):
-        legal_actions = self.legal_actions()
-        if action not in legal_actions:
-            raise ValueError(f"found an illegal action {action}; "
-                             f"legal actions are {legal_actions}")
+    def _check_action(self, i, j):
+        if self.board[i, j] != 0:
+            raise ValueError(f"found an illegal action {i * 3 + j}; "
+                             f"legal actions are {self.legal_actions()}")
 
-    @staticmethod
-    def _check_board(board, i, j):
-        possible_winner = board[i, j]
-        winner_row = abs(board[i, :].sum()) == 3
+    def _check_board(self, i, j):
+        if self._move_count < 5:
+            return 0, False
+        possible_winner = self.board[i, j]
+        winner_row = abs(self.board[i, :].sum()) == 3
         if winner_row:
             return possible_winner, True
-        winner_col = abs(board[:, j].sum()) == 3
+        winner_col = abs(self.board[:, j].sum()) == 3
         if winner_col:
             return possible_winner, True
         if i == j:
-            winner_diag = abs(board[[0, 1, 2], [0, 1, 2]].sum()) == 3
+            winner_diag = abs(self.board[[0, 1, 2], [0, 1, 2]].sum()) == 3
             if winner_diag:
                 return possible_winner, True
         elif i + j == 2:
-            winner_diag = abs(board[[0, 1, 2], [2, 1, 0]].sum()) == 3
+            winner_diag = abs(self.board[[0, 1, 2], [2, 1, 0]].sum()) == 3
             if winner_diag:
                 return possible_winner, True
-        is_draw = board.flatten().all()
-        return 0, is_draw
+        if self._move_count == 3 * 3:
+            # Draw
+            return 0, True
+        return 0, False
 
 
 if __name__ == '__main__':
