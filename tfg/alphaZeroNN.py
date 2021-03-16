@@ -8,7 +8,7 @@ import tfg.alphaZeroConfig as config
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import (
     Input, Conv2D, BatchNormalization,
-    LeakyReLU, Dense, Flatten, add, Activation)
+    LeakyReLU, Dense, Flatten, add, Activation, Lambda)
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop
 from tensorflow.keras import regularizers
 
@@ -47,15 +47,17 @@ class NeuralNetworkAZ:
         policy_head = self._create_policy_head(nn)
 
         model = Model(inputs=[input], outputs=[value_head, policy_head])
-        model.compile(optimizer=SGD(learning_rate=self.learning_rate,
-                                    momentum=self.momentum),
+        model.compile(#optimizer=SGD(learning_rate=self.learning_rate,
+                      #              momentum=self.momentum),
+                      optimizer=Adam(learning_rate=self.learning_rate),
                       # TODO deberiamos llamar a nuestra funcion
                       #  self._softmax_cross_entropy -> peta
                       loss={
                           'value_head': tf.keras.losses.MeanSquaredError(),
                           'policy_head': tf.keras.losses.CategoricalCrossentropy()
                       },
-                      loss_weights={'value_head': 0.5, 'policy_head': 0.5})
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5}
+                      )
 
         return model
 
@@ -154,8 +156,11 @@ class NeuralNetworkAZ:
             use_bias=False,
             kernel_regularizer=regularizers.l2(self.regularizer_constant)
         )(layer)
-        layer = Activation('softmax', name='policy_head')(layer)  # Modified!
-
+        
+        layer = Activation('softmax', name = 'policy_head')(layer)
+        #layer = Activation('softmax')(layer)  # Modified!
+        #layer = tf.keras.backend.print_tensor(layer, message="Info: ")
+        #layer = Lambda(lambda x : x, name = 'policy_head')(layer)
         return layer
 
     # FIXME not working properly
@@ -200,6 +205,8 @@ nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_const
                           input_dim = input_dimension, output_dim = output_dimension, 
                           residual_layers=config.RESIDUAL_LAYERS, filters = config.CONV_FILTERS, kernel_size=config.CONV_KERNEL_SIZE)
 #nn_test.model.summary()
+#tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
+
 
 first_player = np.array([[0,0,0], 
                          [0,1,0], 
@@ -210,12 +217,12 @@ second_player = np.array([[0,0,0],
                           [0,0,1]])
 sample_1 = np.reshape(np.append(first_player, second_player), input_dimension)
 
-train_X = np.array([sample_1, sample_1])
-train_Y = np.array([-1, -1])
-train_Z = np.array([[1,0,0,0,0,0,0,0,0], [1,0,0,0,0,0,0,0,0]])
+b_size = 1
+train_X = np.array([sample_1 for i in range(b_size)])
+train_Y = np.array([-1 for i in range(b_size)])
+train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)])
 
-nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = 1, epochs = 100, verbose = 2, validation_split = 0.5)
+nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
 predictions = nn_test.predict(x = train_X)
-
-print(train_Z[0], predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
+print(tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """

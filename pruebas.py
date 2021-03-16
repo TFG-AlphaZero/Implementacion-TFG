@@ -27,10 +27,12 @@ if __name__ == '__main__':
     #alphaZero.train()
     #alphaZero.save('models/TicTacToeDemo.h5')
 
-    play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
+    #play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
 
-    #results = play(game, Minimax(game), alphaZero, games=10,
-    #               max_workers=config.MAX_WORKERS)
+    results = play(game, Minimax(game), alphaZero, games=10)
+    print(results)
+    
+    #results = play(game, alphaZero, Minimax(game), games = 10)
     #print(results)
-    #results = play(game, alphaZero, Minimax(game), games = 15)
-    #print(results)
+
+    

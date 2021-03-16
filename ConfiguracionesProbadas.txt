@@ -1,3 +1,4 @@
+Tres en raya (1-9-0):
 """In this file, every alphaZero parameter is set"""
 
 # 1) Self Play

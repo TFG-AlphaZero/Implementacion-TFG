@@ -83,7 +83,8 @@ class AlphaZero(Strategy):
             max_iter=self.mcts_times,
             selection_policy=self._selection_policy,
             value_function=self._value_function,
-            best_node_policy='robust'
+            best_node_policy='robust',
+            reset_tree=False
         )
 
         self.buffer = collections.deque(maxlen=self.buffer_size)
