@@ -25,7 +25,7 @@ if __name__ == '__main__':
     alphaZero = AlphaZero(game)
     alphaZero.load('models/TicTacToeDemo.h5')
     #alphaZero.train()
-    #alphaZero.save('models/TicTacToeDemo.h5')
+    #alphaZero.save('models/TicTacToeDemoV2.h5')
 
     #play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
 
