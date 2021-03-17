@@ -13,6 +13,11 @@ from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
 from joblib import Parallel, delayed
 
+# TODO gpu is disabled here by force because training wouldn't work otherwise
+#   it may be a good idea disabling only if necessary
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
@@ -159,6 +164,8 @@ class AlphaZero(Strategy):
                 game_states_data = []
                 counter = t_equals_one
 
+                s = time.time()
+
                 while True:
                     action = mcts.move(observation)
                     counter = max(0, counter - 1)
@@ -168,6 +175,7 @@ class AlphaZero(Strategy):
                     mcts.update(action)
 
                     if done:
+                        print(f"game finished in {time.time() - s}")
                         break
 
                 perspective = 1
@@ -240,6 +248,12 @@ class AlphaZero(Strategy):
 
         return input
 
+    def get_weights(self):
+        return self.neural_network.model.get_weights()
+
+    def set_weights(self, weights):
+        self.neural_network.model.set_weights(weights)
+
 
 class QPlusU:
     """Class representing the Q + U formula. (Deep RL)
@@ -274,3 +288,83 @@ class QPlusU:
         )
 
         return np.argmax(q_param + u_param)
+
+
+def create_alphazero(game, max_workers=None,
+                     self_play_times=config.SELF_PLAY_TIMES,
+                     max_train_time=config.MAX_TRAIN_TIME,
+                     max_train_error=config.MAX_TRAIN_ERROR,
+                     batch_size=config.BATCH_SIZE,
+                     buffer_size=config.BUFFER_SIZE,
+                     epochs=config.EPOCHS,
+                     t_equals_one=config.T_EQUALS_ONE,
+                     *args, **kwargs):
+
+    if max_workers is None:
+        raise NotImplementedError("not implemented yet")
+
+    import ray
+
+    if not ray.is_initialized():
+        ray.init()
+
+    def keep_iterating():
+        result = True
+        if max_train_time is not None:
+            result &= (current_time - start_time) < max_train_time
+        result &= current_error > max_train_error
+        return result
+
+    AZ = ray.remote(AlphaZero)
+    azs = [AZ.remote(game, *args, **kwargs) for _ in range(max_workers)]
+    actor = AlphaZero(game, *args, **kwargs)
+
+    start_time = time.time()
+    current_time = start_time
+    current_error = float('inf')
+
+    buffer = collections.deque(maxlen=buffer_size)
+
+    d_games = self_play_times // max_workers
+    r_games = self_play_times % max_workers
+    n_games = [d_games] * max_workers
+    if r_games != 0:
+        for i in range(r_games):
+            n_games[i] += 1
+
+    while keep_iterating():
+        futures = [az._self_play.remote(g, None, t_equals_one)
+                   for az, g in zip(azs, n_games)]
+        moves = ray.get(futures)
+        for m in moves:
+            buffer.extend(m)
+
+        size = min(len(buffer), batch_size)
+        mini_batch = random.sample(buffer, size)
+
+        x, y, z = zip(*mini_batch)
+        x_train = np.array([
+            actor._convert_to_network_input(obs, to_play) for obs, to_play in
+            list(x)]
+        )
+        train_prob = np.array(list(y))
+        train_reward = np.array(list(z))
+
+        history = actor.neural_network.fit(x=x_train,
+                                           y=[train_reward, train_prob],
+                                           batch_size=32,
+                                           epochs=epochs,
+                                           verbose=2,
+                                           validation_split=0)
+
+        current_error = history.history['loss'][-1]
+        current_time = time.time()
+
+        weights = actor.get_weights()
+        futures = [az.set_weights.remote(weights) for az in azs]
+        ray.get(futures)
+
+    for az in azs:
+        ray.kill(az)
+
+    return actor

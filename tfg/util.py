@@ -94,3 +94,12 @@ def play(game, white, black, games=1, max_workers=None,
 
     results = Parallel(max_workers)(delayed(play_)(g) for g in n_games)
     return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
+
+
+def enable_gpu():
+    import tensorflow as tf
+
+    # GPU didn't work otherwise
+    gpus = tf.config.list_physical_devices('GPU')
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)

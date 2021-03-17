@@ -568,7 +568,6 @@ class MonteCarloTree(Strategy):
                     reward = self._simulate(env) * player
                 else:
                     # Estimate via value_function
-                    # TODO check if we should multiply by the player or not
                     reward = self._value_function(current_node)
 
             # Backpropagation phase

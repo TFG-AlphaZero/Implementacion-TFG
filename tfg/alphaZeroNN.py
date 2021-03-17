@@ -1,17 +1,7 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import tensorflow as tf
 import numpy as np
-import tfg.alphaZeroConfig as config
-import tensorflow.keras.backend as K
-
-from tensorflow.keras.models import Sequential, Model, load_model
-from tensorflow.keras.layers import (
-    Input, Conv2D, BatchNormalization,
-    LeakyReLU, Dense, Flatten, add, Activation, Lambda)
-from tensorflow.keras.optimizers import SGD, Adam, RMSprop
-from tensorflow.keras import regularizers
 
 
 class NeuralNetworkAZ:
@@ -37,6 +27,11 @@ class NeuralNetworkAZ:
         self.model.predict(np.zeros(shape=(1,) + self.model.input_shape[1:]))
 
     def _create_model(self, filters, kernel_size):
+        import tensorflow as tf
+        from tensorflow.keras.models import Model
+        from tensorflow.keras.layers import Input
+        from tensorflow.keras.optimizers import Adam
+
         input = Input(shape=self.input_dim)
         nn = self._create_convolutional_layer(input, filters, kernel_size)
 
@@ -63,6 +58,11 @@ class NeuralNetworkAZ:
     def _create_convolutional_layer(self, input, filters, kernel_size):
         # TODO podemos ponerles nombres a los layers para que se visualicen
         #  mejor
+        from tensorflow.keras.layers import (
+            Conv2D, BatchNormalization, LeakyReLU
+        )
+        from tensorflow.keras import regularizers
+
         layer = Conv2D(
             filters=filters,
             kernel_size=kernel_size,
@@ -79,6 +79,11 @@ class NeuralNetworkAZ:
         return layer
 
     def _create_residual_layer(self, input, filters, kernel_size):
+        from tensorflow.keras.layers import (
+            Conv2D, BatchNormalization, LeakyReLU, add
+        )
+        from tensorflow.keras import regularizers
+
         layer = self._create_convolutional_layer(input, filters, kernel_size)
 
         layer = Conv2D(
@@ -100,6 +105,11 @@ class NeuralNetworkAZ:
         return layer
         
     def _create_value_head(self, input):
+        from tensorflow.keras.layers import (
+            Conv2D, BatchNormalization, LeakyReLU, Dense, Flatten
+        )
+        from tensorflow.keras import regularizers
+
         layer = Conv2D(
             filters=1,
             kernel_size=(1, 1),
@@ -133,6 +143,11 @@ class NeuralNetworkAZ:
         return layer
 
     def _create_policy_head(self, input):
+        from tensorflow.keras.layers import (
+            Conv2D, BatchNormalization, LeakyReLU, Dense, Flatten, Activation
+        )
+        from tensorflow.keras import regularizers
+
         layer = Conv2D(
             filters=2,
             kernel_size=(1, 1),
@@ -162,6 +177,8 @@ class NeuralNetworkAZ:
         return layer
 
     def _softmax_cross_entropy(self, y_true, y_predicted):
+        import tensorflow as tf
+
         pi = y_true
         p = y_predicted
       
@@ -185,15 +202,18 @@ class NeuralNetworkAZ:
         return self.model.fit(*args, **kwargs)
 
     def predict(self, x):
-        #return self.model.predict(x)
-        predictions = self.model(x, training = True) #Much faster for small inputs
-        res = predictions[0].numpy(), predictions[1].numpy() #Convert tensors to numpy arrays
-        return res #Output as a tuple (reward, probabilities)
+        # Much faster than predict for small inputs
+        predictions = self.model(x, training=True)
+        # Convert tensors to numpy arrays
+        res = predictions[0].numpy(), predictions[1].numpy()
+        # Output as a tuple (reward, probabilities)
+        return res
 
     def save_model(self, path):
         self.model.save(path)
 
     def load_model(self, path):
+        from tensorflow.keras.models import load_model
         self.model = load_model(path)
 
 """

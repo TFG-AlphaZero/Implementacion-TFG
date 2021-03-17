@@ -1,18 +1,13 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import tensorflow as tf
 import numpy as np
 
 from tfg.strategies import Minimax, HumanStrategy
-from tfg.util import play
-from tfg.alphaZero import AlphaZero
+from tfg.util import enable_gpu, play
+from tfg.alphaZero import AlphaZero, create_alphazero
 from game.tictactoe import TicTacToe
 
-# GPU didn't work otherwise
-gpus = tf.config.list_physical_devices('GPU')
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
 
 class DebuggerAZ():
 
@@ -40,21 +35,23 @@ class DebuggerAZ():
 
 
 if __name__ == '__main__':
+    enable_gpu()
     game = TicTacToe()
 
-    alphaZero = AlphaZero(game)
+    alphaZero = create_alphazero(game, max_workers=4, self_play_times=8,
+                                 max_train_time=10)
     #alphaZero.load('models/TicTacToeDemoNN.h5')
-    alphaZero.train()
-    #alphaZero.save('models/TicTacToeDemoNN.h5')
+    #alphaZero.train()
+    alphaZero.save('models/TicTacToeDemoNN.h5')
 
-    #play(game, HumanStrategy(game), alphaZero, render=True, print_results=True)
+    play(game, Minimax(game), alphaZero, games=10)
 
-    debugger = DebuggerAZ(alphaZero)
-    search_board = np.array([[1,-1, -1],
-                             [0, 1, 0],
-                             [0, 0, 0]])
-    search_play = 1
-    debugger.test_nn(search_board, search_play)
+    # debugger = DebuggerAZ(alphaZero)
+    # search_board = np.array([[1,-1, -1],
+    #                          [0, 1, 0],
+    #                          [0, 0, 0]])
+    # search_play = 1
+    # debugger.test_nn(search_board, search_play)
     #debugger.get_boards(search_board, search_play)
     
     #results = play(game, Minimax(game), alphaZero, games=10)
