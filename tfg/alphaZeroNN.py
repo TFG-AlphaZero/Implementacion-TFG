@@ -54,7 +54,7 @@ class NeuralNetworkAZ:
                       #  self._softmax_cross_entropy -> peta
                       loss={
                           'value_head': tf.keras.losses.MeanSquaredError(),
-                          'policy_head': tf.keras.losses.CategoricalCrossentropy()
+                          'policy_head': self._softmax_cross_entropy
                       },
                       loss_weights={'value_head': 0.5, 'policy_head': 0.5}
                       )
@@ -147,9 +147,7 @@ class NeuralNetworkAZ:
         layer = LeakyReLU()(layer)
 
         layer = Flatten()(layer)
-        #layer = Dense(self.output_dim, activation='linear', use_bias=False, kernel_regularizer = regularizers.l2(self.regularizer_constant), name = 'policy_head')(layer)
 
-        # TODO modified
         layer = Dense(
             self.output_dim,
             activation='linear',
@@ -158,24 +156,25 @@ class NeuralNetworkAZ:
         )(layer)
         
         layer = Activation('softmax', name = 'policy_head')(layer)
-        #layer = Activation('softmax')(layer)  # Modified!
-        #layer = tf.keras.backend.print_tensor(layer, message="Info: ")
+        
+        #layer = tf.keras.backend.print_tensor(layer, message="PH Output: ")
         #layer = Lambda(lambda x : x, name = 'policy_head')(layer)
+        
         return layer
 
-    # FIXME not working properly
-    @staticmethod
     def _softmax_cross_entropy(self, y_true, y_predicted):
-        p = y_predicted
         pi = y_true
-
-        zero = tf.zeros(shape = tf.shape(pi), dtype=tf.float32)
-        where = tf.equal(pi, zero)
-
-        negatives = tf.fill(tf.shape(pi), -100.0) 
-        p = tf.where(where, negatives, p)
-
-        loss = tf.nn.softmax_cross_entropy_with_logits(labels = pi, logits = p)
+        p = y_predicted
+      
+        #zero = tf.zeros(shape = tf.shape(pi), dtype=tf.float32)
+        #where = tf.equal(pi, zero)
+        #negatives = tf.fill(tf.shape(pi), -100.0) 
+        
+        #p = tf.where(where, negatives, p) #We are basically masking out illegal moves
+        #tf.keras.backend.print_tensor(p, message="P: ")
+        #tf.keras.backend.print_tensor(pi, message="Pi: ")
+        
+        loss = tf.keras.losses.CategoricalCrossentropy()(pi, p)
 
         return loss
     
@@ -188,7 +187,7 @@ class NeuralNetworkAZ:
 
     def predict(self, x):
         #return self.model.predict(x)
-        return self.model(x, training = False) #Much faster for small inputs
+        return self.model(x, training = True) #Much faster for small inputs
 
     def save_model(self, path):
         self.model.save(path)
@@ -205,25 +204,31 @@ output_dimension = 9
 nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM,
                           input_dim = input_dimension, output_dim = output_dimension, 
                           residual_layers=config.RESIDUAL_LAYERS, filters = config.CONV_FILTERS, kernel_size=config.CONV_KERNEL_SIZE)
-nn_test.model.summary()
+#nn_test.model.summary()
 #tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
 
 
 first_player = np.array([[0,0,0], 
                          [0,1,0], 
-                         [0,0,0]])
+                         [0,1,0]])
 
 second_player = np.array([[0,0,0], 
-                          [0,0,0], 
+                          [0,0,1], 
                           [0,0,1]])
-sample_1 = np.reshape(np.append(first_player, second_player), input_dimension)
+
+turn_player = np.array([[0,0,0], 
+                        [0,0,0], 
+                        [0,0,0]])
+
+
+sample_1 = np.reshape(np.append(np.append(first_player, second_player), turn_player), input_dimension)
 
 b_size = 1
 train_X = np.array([sample_1 for i in range(b_size)])
 train_Y = np.array([-1 for i in range(b_size)])
-train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)])
+train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)], dtype=float)
 
-#nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
-#predictions = nn_test.predict(x = train_X)
-print(tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
+nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
+predictions = nn_test.predict(x = train_X)
+print(predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """

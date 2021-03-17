@@ -90,12 +90,12 @@ class AlphaZero(Strategy):
             result = True
             if max_train_time is not None:
                 result &= (current_time - start_time) < max_train_time
-            result &= error > max_train_error
+            result &= current_error > max_train_error
             return result
 
         start_time = time.time()
         current_time = start_time
-        error = 1
+        current_error = float('inf') 
 
         while keep_iterating():
             self._buffer.extend(
@@ -107,17 +107,18 @@ class AlphaZero(Strategy):
             
             x, y, z = zip(*mini_batch)
             x_train = np.array([
-                self._convert_to_network_input(obs) for obs in list(x)]
+                self._convert_to_network_input(obs, to_play) for obs, to_play in list(x)]
             )
             train_prob = np.array(list(y))
             train_reward = np.array(list(z))
 
-            self.neural_network.fit(x=x_train, y=[train_reward, train_prob],
-                                    batch_size=32,
-                                    epochs=epochs,
-                                    verbose=2,
-                                    validation_split=0)
-
+            history = self.neural_network.fit(x=x_train, y=[train_reward, train_prob],
+                                              batch_size=32,
+                                              epochs=epochs,
+                                              verbose=2,
+                                              validation_split=0)
+            
+            current_error = history.history['loss'][-1]
             current_time = time.time()
 
     def _self_play(self, games, max_workers, t_equals_one):
@@ -162,7 +163,7 @@ class AlphaZero(Strategy):
                     action = mcts.move(observation)
                     counter = max(0, counter - 1)
                     pi = make_policy(env, mcts.stats['actions'], counter)
-                    game_states_data.append((observation, pi))
+                    game_states_data.append(((observation, env.to_play), pi))
                     observation, _, done, _ = env.step(action)
                     mcts.update(action)
 
@@ -212,7 +213,7 @@ class AlphaZero(Strategy):
         self.neural_network.load_model(path)
 
     def _value_function(self, node):
-        nn_input = np.array([self._convert_to_network_input(node.observation)])
+        nn_input = np.array([self._convert_to_network_input(node.observation, node.to_play)])
         predictions = self.neural_network.predict(nn_input)
 
         reward = predictions[0][0][0]
@@ -223,18 +224,22 @@ class AlphaZero(Strategy):
 
         return reward
 
-    def _convert_to_network_input(self, observation):
-        def convert_to_binary(board):
-            first = board.copy()
-            first[first == -1] = 0
+    def _convert_to_network_input(self, board, to_play):
+        def convert_to_binary(board, to_play):
+            black = board.copy()
+            black[black == 1] = 0
+            black[black == -1] = 1
+            
+            white = board.copy()
+            white[white == -1] = 0
 
-            second = board.copy()
-            second[second == 1] = 0
-            second[second == -1] = 1
+            player = 0 if to_play == 1 else 1 #All 1 if black to play, all 0 if white to play
+            
+            turn = np.full(board.shape, player)
 
-            return np.append(first, second)
+            return np.append(np.append(black, white), turn)
 
-        input = convert_to_binary(observation)
+        input = convert_to_binary(board, to_play)
         input = np.reshape(input, self.input_dim)
 
         return input

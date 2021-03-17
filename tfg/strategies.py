@@ -569,7 +569,7 @@ class MonteCarloTree(Strategy):
                 else:
                     # Estimate via value_function
                     # TODO check if we should multiply by the player or not
-                    reward = self._value_function(current_node) * player
+                    reward = self._value_function(current_node)
 
             # Backpropagation phase
             # Who played the move that lead to that node
