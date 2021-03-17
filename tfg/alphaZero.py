@@ -225,22 +225,18 @@ class AlphaZero(Strategy):
         return reward
 
     def _convert_to_network_input(self, board, to_play):
-        def convert_to_binary(board, to_play):
-            black = board.copy()
-            black[black == 1] = 0
-            black[black == -1] = 1
-            
-            white = board.copy()
-            white[white == -1] = 0
+        black = board.copy()
+        black[black == 1] = 0
+        black[black == -1] = 1
 
-            player = 0 if to_play == 1 else 1 #All 1 if black to play, all 0 if white to play
-            
-            turn = np.full(board.shape, player)
+        white = board.copy()
+        white[white == -1] = 0
 
-            return np.append(np.append(black, white), turn)
+        player = 0 if to_play == 1 else 1 #All 1 if black to play, all 0 if white to play
 
-        input = convert_to_binary(board, to_play)
-        input = np.reshape(input, self.input_dim)
+        turn = np.full(board.shape, player)
+
+        input = np.stack((black, white, turn), axis = 2)
 
         return input
 
