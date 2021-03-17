@@ -4,6 +4,7 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 import tensorflow as tf
 import numpy as np
 import tfg.alphaZeroConfig as config
+import tensorflow.keras.backend as K
 
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import (
@@ -50,11 +51,9 @@ class NeuralNetworkAZ:
         model.compile(#optimizer=SGD(learning_rate=self.learning_rate,
                       #              momentum=self.momentum),
                       optimizer=Adam(learning_rate=self.learning_rate),
-                      # TODO deberiamos llamar a nuestra funcion
-                      #  self._softmax_cross_entropy -> peta
                       loss={
                           'value_head': tf.keras.losses.MeanSquaredError(),
-                          'policy_head': self._softmax_cross_entropy
+                          'policy_head': tf.keras.losses.CategoricalCrossentropy()
                       },
                       loss_weights={'value_head': 0.5, 'policy_head': 0.5}
                       )
@@ -187,7 +186,9 @@ class NeuralNetworkAZ:
 
     def predict(self, x):
         #return self.model.predict(x)
-        return self.model(x, training = True) #Much faster for small inputs
+        predictions = self.model(x, training = True) #Much faster for small inputs
+        res = predictions[0].numpy(), predictions[1].numpy() #Convert tensors to numpy arrays
+        return res #Output as a tuple (reward, probabilities)
 
     def save_model(self, path):
         self.model.save(path)
@@ -198,7 +199,7 @@ class NeuralNetworkAZ:
 """
 #Example of use provided below!
 
-input_dimension = (3, 3) + config.INPUT_LAYERS
+input_dimension = (3, 3) + (2,)
 output_dimension = 9
 
 nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM,
@@ -208,27 +209,25 @@ nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_const
 #tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
 
 
-first_player = np.array([[0,0,0], 
-                         [0,1,0], 
-                         [0,1,0]])
+black = np.array([[0,0,0], 
+                  [0,1,0], 
+                  [0,1,0]])
 
-second_player = np.array([[0,0,0], 
-                          [0,0,1], 
-                          [0,0,1]])
-
-turn_player = np.array([[0,0,0], 
-                        [0,0,0], 
-                        [0,0,0]])
+white = np.array([[0,0,0], 
+                  [0,0,1], 
+                  [0,0,1]])
 
 
-sample_1 = np.reshape(np.append(np.append(first_player, second_player), turn_player), input_dimension)
+sample_1 = np.stack((black, white), axis = 2)
 
 b_size = 1
 train_X = np.array([sample_1 for i in range(b_size)])
-train_Y = np.array([-1 for i in range(b_size)])
+train_Y = np.array([1 for i in range(b_size)])
 train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)], dtype=float)
 
 nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
 predictions = nn_test.predict(x = train_X)
-print(predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
+#pred_np = predictions.eval(session = )
+print(predictions)
+#print(predictions[0][0][0], predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """
