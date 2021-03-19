@@ -218,9 +218,20 @@ class NeuralNetworkAZ:
 
 """
 #Example of use provided below!
+def _convert_to_network_input(board, to_play):
+    black = board.copy()
+    black[black == 1] = 0
+    black[black == -1] = 1
+    white = board.copy()
+    white[white == -1] = 0
+    player = 0 if to_play == 1 else 1
+    turn = np.full(board.shape, player)
+    input = np.stack((black, white, turn), axis = 2)
+    return input
 
-input_dimension = (3, 3) + (2,)
+input_dimension = (3, 3) + (3,)
 output_dimension = 9
+import tfg.alphaZeroConfig as config
 
 nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM,
                           input_dim = input_dimension, output_dim = output_dimension, 
@@ -228,26 +239,18 @@ nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_const
 #nn_test.model.summary()
 #tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
 
+search_board = np.array([[0, 0, -1],
+                         [0, 1, 0],
+                         [0, 0, 0]])
+search_turn = 1
+b_size = 25
 
-black = np.array([[0,0,0], 
-                  [0,1,0], 
-                  [0,1,0]])
-
-white = np.array([[0,0,0], 
-                  [0,0,1], 
-                  [0,0,1]])
-
-
-sample_1 = np.stack((black, white), axis = 2)
-
-b_size = 1
-train_X = np.array([sample_1 for i in range(b_size)])
+train_X = np.array([_convert_to_network_input(search_board, search_turn) for i in range(b_size)])        
 train_Y = np.array([1 for i in range(b_size)])
 train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)], dtype=float)
 
 nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
-predictions = nn_test.predict(x = train_X)
-#pred_np = predictions.eval(session = )
+predictions = nn_test.predict(x = np.array([train_X[-1]]))
 print(predictions)
 #print(predictions[0][0][0], predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
 """

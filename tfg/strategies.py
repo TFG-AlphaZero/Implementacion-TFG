@@ -555,6 +555,9 @@ class MonteCarloTree(Strategy):
                 # Update reward: if WHITE won reward=1,
                 # but if we are black reward should be -1 as we lost
                 reward *= player
+                # TODO Fix reward perspective
+                # reward *= current_node.to_play
+                
                 history.append(current_node)
 
             # We might have found a real leaf node during selection
@@ -568,10 +571,19 @@ class MonteCarloTree(Strategy):
                     reward = self._simulate(env) * player
                 else:
                     # Estimate via value_function
+                    #TODO Fix reward perspective
                     reward = self._value_function(current_node)
 
             # Backpropagation phase
             # Who played the move that lead to that node
+            """
+            perspective = -1
+            for node in reversed(history):
+                r = reward * perspective
+                self._backpropagate(node, r)
+                perspective *= -1
+            """
+            #TODO Fix reward perspective
             to_play = player
             for node in history:
                 # OWNER W W B B
@@ -580,7 +592,7 @@ class MonteCarloTree(Strategy):
                 r = reward if to_play == player else -reward
                 self._backpropagate(node, r)
                 to_play = node.to_play
-
+            
             i += 1
             current_time = time.time()
             iter_time = (current_time - start) / i

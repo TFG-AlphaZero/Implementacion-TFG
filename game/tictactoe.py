@@ -84,7 +84,7 @@ class TicTacToe(GameEnv):
             winner_diag = abs(self.board[[0, 1, 2], [0, 1, 2]].sum()) == 3
             if winner_diag:
                 return possible_winner, True
-        elif i + j == 2:
+        if i + j == 2:
             winner_diag = abs(self.board[[0, 1, 2], [2, 1, 0]].sum()) == 3
             if winner_diag:
                 return possible_winner, True
