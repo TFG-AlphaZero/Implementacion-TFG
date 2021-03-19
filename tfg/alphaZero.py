@@ -374,7 +374,7 @@ def create_alphazero(game, max_workers=None,
     import ray
 
     if not ray.is_initialized():
-        ray.init()
+        ray.init(log_to_driver=False)
 
     def is_done():
         done = False
@@ -382,8 +382,8 @@ def create_alphazero(game, max_workers=None,
             done |= (current_time - start_time) > max_train_time
         if max_train_error is not None:
             done |= current_error < max_train_error
-        if max_games_counter is not None:
-            done |= games_counter > max_games_counter
+        # if max_games_counter is not None:
+        #     done |= games_counter > max_games_counter
 
         return done
 
@@ -414,13 +414,13 @@ def create_alphazero(game, max_workers=None,
         size = min(len(buffer), batch_size)
         mini_batch = random.sample(buffer, size)
 
-        x, y, z = zip(*mini_batch)
+        boards, turns, pies, rewards = zip(*mini_batch)
         x_train = np.array([
-            actor._convert_to_network_input(obs, to_play) for obs, to_play in
-            list(x)]
-        )
-        train_prob = np.array(list(y))
-        train_reward = np.array(list(z))
+            actor._convert_to_network_input(board, turn)
+            for board, turn in zip(boards, turns)
+        ])
+        train_prob = np.array(list(pies))
+        train_reward = np.array(list(rewards))
 
         history = actor.neural_network.fit(x=x_train,
                                            y=[train_reward, train_prob],
@@ -429,14 +429,11 @@ def create_alphazero(game, max_workers=None,
                                            verbose=2,
                                            validation_split=0)
 
-        current_error = history.history['loss'][-1]
-        current_time = time.time()
-
         weights = actor.get_weights()
         futures = [az.set_weights.remote(weights) for az in azs]
         ray.get(futures)
 
-    for az in azs:
-        ray.kill(az)
+        current_error = history.history['loss'][-1]
+        current_time = time.time()
 
     return actor
