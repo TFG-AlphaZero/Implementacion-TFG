@@ -1,16 +1,16 @@
 """In this file, every alphaZero parameter is set"""
 
 # 1) MCTS Parameters
-MCTS_TIMES = 10
-C_PUCT = 5
+MCTS_ITER = 50 #At least two iterations required
+C_PUCT = 1
 MCTS_MAX_TIME = None
 
 # 2) Neural Network Parameters
-LEARNING_RATE = 0.001
-EPOCHS = 25
+LEARNING_RATE = 0.01
+EPOCHS = 10
 REGULARIZER_CONST = 0.0001
 MOMENTUM = 0.9
-RESIDUAL_LAYERS = 3
+RESIDUAL_LAYERS = 5
 CONV_FILTERS = 64
 CONV_KERNEL_SIZE = (3, 3)
 INPUT_LAYERS = (3,)
@@ -18,9 +18,9 @@ INPUT_LAYERS = (3,)
 # 3) Train Parameters
 MAX_TRAIN_TIME = None
 MAX_TRAIN_ERROR = None
-MAX_GAMES_COUNTER = 25
+MAX_GAMES_COUNTER = 500
 
-SELF_PLAY_TIMES = 5
+SELF_PLAY_TIMES = 10
 T_EQUALS_ONE = 12
 BUFFER_SIZE = 4096
 BATCH_SIZE = 128

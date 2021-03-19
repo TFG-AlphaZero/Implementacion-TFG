@@ -1,4 +1,5 @@
 import numpy as np
+from strategies import Strategy
 
 class Debugger():
 
@@ -58,3 +59,36 @@ class Debugger():
             print("Vector Pi: ", pi)
             print("Winner: ", winner)
             
+class NeuralNetworkToPlay(Strategy):
+    
+    def __init__(self, env, neural_network):
+        self.neural_network = neural_network
+        self.env = env
+
+    def move(self, observation):
+        player = self.env.to_play
+        legal_actions = observation.flatten()
+        
+        nn_input = np.array([self._convert_to_network_input(observation, player)])
+        predictions = self.neural_network.predict(nn_input)
+        
+        reward = predictions[0][0][0]
+        probabilities = predictions[1][0]
+        
+        np.set_printoptions(suppress=True)
+        np.set_printoptions(precision=2)
+        print(reward, probabilities)
+        
+        probabilities[legal_actions != 0] = 0
+        return np.argmax(probabilities)
+
+    def _convert_to_network_input(self, board, to_play):
+        black = board.copy()
+        black[black == 1] = 0
+        black[black == -1] = 1
+        white = board.copy()
+        white[white == -1] = 0
+        player = 0 if to_play == 1 else 1
+        turn = np.full(board.shape, player)
+        input = np.stack((black, white, turn), axis = 2)
+        return input

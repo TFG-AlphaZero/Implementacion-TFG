@@ -25,7 +25,7 @@ class AlphaZero(Strategy):
     # TODO add custom action/observation encoders/decoders
     def __init__(self, env,
                  c_puct=config.C_PUCT,
-                 mcts_times=config.MCTS_TIMES,
+                 mcts_iter=config.MCTS_ITER,
                  mcts_max_time=config.MCTS_MAX_TIME,
                  t_equals_one=config.T_EQUALS_ONE,
                  buffer_size=config.BUFFER_SIZE,
@@ -36,7 +36,7 @@ class AlphaZero(Strategy):
             env (tfg.games.GameEnv): Game this strategy is for.
             c_puct (float): C constant used in the selection policy PUCT
                 algorithm.
-            mcts_times (int): Max iterations of the MCTS algorithm.
+            mcts_iter (int): Max iterations of the MCTS algorithm.
             mcts_max_time (float): Max time for the MCTS algorithm.
             buffer_size (int): Max number of states that can be stored before
                 training. If this maximum is reached, oldest states will be
@@ -53,7 +53,7 @@ class AlphaZero(Strategy):
 
         self._env = env
         self.mcts_kwargs = dict(
-            max_iter=mcts_times,
+            max_iter=mcts_iter,
             max_time=mcts_max_time,
             selection_policy=QPlusU(c_puct),
             value_function=self._value_function,
@@ -146,6 +146,7 @@ class AlphaZero(Strategy):
             current_error = history.history['loss'][-1]
             current_time = time.time()
             games_counter += self_play_times
+            print("Partidas Jugadas: ", games_counter)
 
     def _self_play(self, games, max_workers, t_equals_one):
         def make_policy(env, nodes, temperature):
