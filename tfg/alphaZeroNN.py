@@ -203,7 +203,7 @@ class NeuralNetworkAZ:
 
     def predict(self, x):
         # Much faster than predict for small inputs
-        predictions = self.model(x, training=True)
+        predictions = self.model(x, training=False)
         # Convert tensors to numpy arrays
         res = predictions[0].numpy(), predictions[1].numpy()
         # Output as a tuple (reward, probabilities)

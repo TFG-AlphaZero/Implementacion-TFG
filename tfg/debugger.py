@@ -75,9 +75,9 @@ class NeuralNetworkToPlay(Strategy):
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
         
-        np.set_printoptions(suppress=True)
-        np.set_printoptions(precision=2)
-        print(reward, probabilities)
+        #np.set_printoptions(suppress=True)
+        #np.set_printoptions(precision=2)
+        #print(reward, probabilities)
         
         probabilities[legal_actions != 0] = 0
         return np.argmax(probabilities)

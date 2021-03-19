@@ -63,6 +63,7 @@ Observaciones: Hemos redondeado los resultados para que sean mas esteticos.
 - SELF_PLAY_TIMES = 10
 - MAX_GAMES_COUNTER = 500
 - RESIDUAL_LAYERS = 5
+- TRAINING = True
 
 + Resultados evaluada solo Red Neuronal:
 	- Empezando Minimax: (60-40-0)
@@ -87,6 +88,7 @@ Observaciones: Hemos redondeado los resultados para que sean mas esteticos.
 - SELF_PLAY_TIMES = 10
 - MAX_GAMES_COUNTER = 500
 - RESIDUAL_LAYERS = 5
+- Training = True
 
 + Resultados evaluada solo Red Neuronal:
 	- Empezando Minimax: (55-45-0)
@@ -97,6 +99,25 @@ Observaciones: Hemos redondeado los resultados para que sean mas esteticos.
 + Resultados evaluada con 100 iteraciones:
 	- Empezando Minimax: ()
 	- Empezando AZ: ()
-+ Resultados evaluada con 400 iteraciones:
+
+--> Prueba 3:
++ Descripcion: Red neuronal entrenada con los parametros:
+- MCTS_ITER = 100
+- C_PUCT = 1
+- LEARNING_RATE = 0.01
+- MAX_WORKERS = None
+- EPOCHS = 10
+- SELF_PLAY_TIMES = 10
+- MAX_GAMES_COUNTER = 500
+- RESIDUAL_LAYERS = 5
+- Training = False
+
++ Resultados evaluada solo Red Neuronal:
+	- Empezando Minimax: (20-80-0)
+	- Empezando AZ: (0-100-0)
++ Resultados evaluada con 50 iteraciones:
+	- Empezando Minimax: ()
+	- Empezando AZ: ()
++ Resultados evaluada con 100 iteraciones:
 	- Empezando Minimax: ()
 	- Empezando AZ: ()
