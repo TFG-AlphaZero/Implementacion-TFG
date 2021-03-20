@@ -372,6 +372,7 @@ class MonteCarloTree(Strategy):
     def __init__(self, env, max_iter=None, max_time=None,
                  selection_policy=None,
                  value_function=None,
+                 value_pov='to_play',
                  update_function=None,
                  best_node_policy=None,
                  reset_tree=True):
@@ -410,9 +411,15 @@ class MonteCarloTree(Strategy):
                 If this parameter is None the value will be estimated by
                 simulating a game starting from the expanded node. Otherwise,
                 the given function will be used and simulation_policy will be
-                ignored. If a functional class is given it can also define
-                the value_range (int, int) attribute specifying the minimum
-                (loss) and maximum (win) value the function can return.
+                ignored.
+            value_pov (str): Determines if the valur function returns values
+                from the point of view of the player to play in that state
+                ('to_play', default) or, rather, the value means which color
+                is expected to win, independantly of the current turn
+                ('winner'). For example, if black plays and is expected to
+                win, with the first option the value function should return
+                something positive, whereas in the second case something
+                negative should be returned.
             update_function (function, optional): Function that will be used
                 to update the value of custom statistics of each node during
                 node creation and backpropagation. Must be a void function that
@@ -456,6 +463,11 @@ class MonteCarloTree(Strategy):
 
         self._value_function = value_function
 
+        if value_pov not in ('to_play', 'winner'):
+            raise ValueError("value_pov should be one of to_play or winner;"
+                             f"found: {value_pov}")
+        self._value_pov = value_pov
+
         self._update_function = update_function
 
         self._best_node_policy = (
@@ -468,13 +480,6 @@ class MonteCarloTree(Strategy):
             self._selection_policy.value_range
             if hasattr(self._selection_policy, 'value_range')
             else None
-        )
-
-        self._observed_value_range = (
-            self._value_function.value_range
-            if self._value_function is not None and
-            hasattr(self._value_function, 'value_range')
-            else [-1, 1]
         )
 
         self.reset_tree = reset_tree
@@ -552,11 +557,6 @@ class MonteCarloTree(Strategy):
 
                 # Take the action
                 _, reward, done, _ = env.step(action)
-                # Update reward: if WHITE won reward=1,
-                # but if we are black reward should be -1 as we lost
-                reward *= player
-                # TODO Fix reward perspective
-                # reward *= current_node.to_play
                 
                 history.append(current_node)
 
@@ -568,29 +568,18 @@ class MonteCarloTree(Strategy):
 
                 if self._value_function is None:
                     # Simulation phase
-                    reward = self._simulate(env) * player
+                    reward = self._simulate(env)
                 else:
                     # Estimate via value_function
-                    #TODO Fix reward perspective
                     reward = self._value_function(current_node)
+                    if self._value_pov == 'to_play':
+                        reward *= env.to_play
 
             # Backpropagation phase
             # Who played the move that lead to that node
-            """
-            perspective = -1
-            for node in reversed(history):
-                r = reward * perspective
-                self._backpropagate(node, r)
-                perspective *= -1
-            """
-            #TODO Fix reward perspective
             to_play = player
             for node in history:
-                # OWNER W W B B
-                # TURN  W B W B
-                #       + - - +
-                r = reward if to_play == player else -reward
-                self._backpropagate(node, r)
+                self._backpropagate(node, reward * to_play)
                 to_play = node.to_play
             
             i += 1
@@ -657,10 +646,8 @@ class MonteCarloTree(Strategy):
         # Translate reward if necessary
         if self._expected_value_range is not None:
             expected_min, expected_max = self._expected_value_range
-            observed_min, observed_max = self._observed_value_range
-            # We visualize observed range as if observed_min were 0 and
-            # observed max 1
-            t = (reward - observed_min) / (observed_max - observed_min)
+            # We visualize the reward as if it was between 0 and 1
+            t = (reward + 1) / 2
             # Then we set the same proportion in the expected range
             reward = (1 - t) * expected_min + t * expected_max
         node.update(reward, self._update_function)
