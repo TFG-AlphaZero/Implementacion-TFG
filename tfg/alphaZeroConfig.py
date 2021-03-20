@@ -17,7 +17,7 @@ INPUT_LAYERS = (3,)
 
 # 3) Train Parameters
 MAX_TRAIN_TIME = None
-MAX_TRAIN_ERROR = None
+MIN_TRAIN_ERROR = None
 MAX_GAMES_COUNTER = 500
 
 SELF_PLAY_TIMES = 10
@@ -26,8 +26,9 @@ BUFFER_SIZE = 4096
 BATCH_SIZE = 128
 MAX_WORKERS = None
 
-#Wrapper for Neural Network Parameters
+
 class AlphaZeroConfig:
+    """Wrapper for Neural Network Parameters."""
 
     def __init__(self,
                  learning_rate=LEARNING_RATE,

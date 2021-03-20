@@ -2,21 +2,14 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
-import copy
+import os
 import collections
 import time
-import itertools
 import random
 import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
-from joblib import Parallel, delayed
-
-# TODO gpu is disabled here by force because training wouldn't work otherwise
-#   it may be a good idea disabling only if necessary
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
 class AlphaZero(Strategy):
@@ -27,9 +20,9 @@ class AlphaZero(Strategy):
                  c_puct=config.C_PUCT,
                  mcts_iter=config.MCTS_ITER,
                  mcts_max_time=config.MCTS_MAX_TIME,
-                 t_equals_one=config.T_EQUALS_ONE,
                  buffer_size=config.BUFFER_SIZE,
-                 nn_config=None):
+                 nn_config=None,
+                 gpu=True):
         """All default values are taken from tfg.alphaZeroConfig
 
         Args:
@@ -45,11 +38,17 @@ class AlphaZero(Strategy):
                 Wrapper with arguments that will be directly passed to
                 tfg.alphaZeroNN.AlphaZeroNN. If output_dim is None,
                 env.action_space.n will be used instead.
+            gpu (bool): Whether to allow gpu usage for the internal neural
+                network or not. Note that Tensorflow should not have been
+                imported before creating the actor. Defaults to True.
         """
         if nn_config is None:
             nn_config = config.AlphaZeroConfig()
         elif isinstance(nn_config, dict):
             nn_config = config.AlphaZeroConfig(**nn_config)
+
+        if not gpu:
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
         self._env = env
         self.mcts_kwargs = dict(
@@ -86,158 +85,156 @@ class AlphaZero(Strategy):
 
     def train(self, self_play_times=config.SELF_PLAY_TIMES,
               max_train_time=config.MAX_TRAIN_TIME,
-              max_train_error=config.MAX_TRAIN_ERROR,
+              min_train_error=config.MIN_TRAIN_ERROR,
               max_games_counter=config.MAX_GAMES_COUNTER,
-              max_workers=config.MAX_WORKERS,
               epochs=config.EPOCHS,
               batch_size=config.BATCH_SIZE,
-              t_equals_one=config.T_EQUALS_ONE):
-        """
-        TODO
+              temperature=config.T_EQUALS_ONE):
+        """Trains the internal neural network via self-play to learn how to
+        play the game.
+
+        All parameters default to the values given in tfg.alphaZeroConfig.
+
+        Args:
+            self_play_times (int): Number of games played before retraining
+                the net.
+            max_train_time (float): Maximum time the training can last.
+            min_train_error (float): Minimum error bellow which the training
+                will stop.
+            max_games_counter (int): Maximum total number of games that can
+                be played before stopping training.
+            epochs (int): Number of epochs each batch will be trained with.
+            batch_size (int): Size of the batch to be sampled of all moves to
+                train the network after self_play_times games have been played.
+            temperature (int): During first moves of each game actions are
+                taken randomly. This parameters sets how many times this will
+                be done.
+
         """
         def is_done():
-            """
-            Training ends if any of the following conditions is met:
-                - Training time is over (current_time > max_train_time)
-                - Error is lower than threshold (current_error < max_train_error)
-                - Max number of played games reached  (games_counter > max_games_counter)
+            """Training ends if any of the following conditions is met:
+                - Training time is over (current_time > max_train_time).
+                - Error is lower than threshold
+                    (current_error < max_train_error).
+                - Max number of played games reached
+                    (games_counter > max_games_counter).
             """
             done = False
             if max_train_time is not None:
                 done |= (current_time - start_time) > max_train_time
-            if max_train_error is not None:
-                done |= current_error < max_train_error
+            if min_train_error is not None:
+                done |= current_error < min_train_error
             if max_games_counter is not None:
                 done |= games_counter > max_games_counter
 
             return done
 
-        #Initialize finishing parameters
+        # Initialize finishing parameters
         start_time = time.time()
         current_time = start_time
         current_error = float('inf')
         games_counter = 0
 
         while not is_done():
-            #Add to buffer the latest played games
+            # Add to buffer the latest played games
             self._buffer.extend(
-                self._self_play(self_play_times, max_workers, t_equals_one)
+                self._self_play(self_play_times, temperature)
             )
 
-            #Extract a mini-batch from buffer
+            # Extract a mini-batch from buffer
             size = min(len(self._buffer), batch_size)
             mini_batch = random.sample(self._buffer, size)
             
-            #Separate data from batch
+            # Separate data from batch
             boards, turns, pies, rewards = zip(*mini_batch)
             train_board = np.array([
-                self._convert_to_network_input(boards[i], turns[i]) for i in range(len(boards))]
+                self._convert_to_network_input(boards[i], turns[i])
+                for i in range(len(boards))]
             )
             train_pi = np.array(list(pies))
             train_reward = np.array(list(rewards))
 
-            #Train neural network with the data from the mini-batch
-            history = self.neural_network.fit(x=train_board, y=[train_reward, train_pi],
+            # Train neural network with the data from the mini-batch
+            history = self.neural_network.fit(x=train_board,
+                                              y=[train_reward, train_pi],
                                               batch_size=32,
                                               epochs=epochs,
                                               verbose=2,
                                               validation_split=0)
-            #Update finishing parameters
+            # Update finishing parameters
             current_error = history.history['loss'][-1]
             current_time = time.time()
             games_counter += self_play_times
-            print("Partidas Jugadas: ", games_counter)
+            print(f"Games played: {games_counter}")
 
-    def _self_play(self, games, max_workers, t_equals_one):
-        def make_policy(env, nodes, temperature):
-            """Returns the pi vector according to temperature parameter
-            """
-            #Obtain visit vector from children
+    def _self_play(self, num, temperature):
+        def make_policy(env, nodes):
+            """Returns the pi vector according to temperature parameter."""
+            # Obtain visit vector from children
             visit_vector = np.zeros(env.action_space.n)
             for action, node in nodes.items():
                 # TODO We are assuming action is an int or a tuple,
                 #  check when generalizing
                 visit_vector[action] = node.visit_count
 
-            if temperature > 0:
+            if self.temperature > 0:
                 # t = 1 | Exploration
                 return visit_vector / visit_vector.sum() 
             else:
-                # t->0 | Explotation
-                #Vector with all 0s and a 1 in the most visisted child
+                # t -> 0 | Exploitation
+                # Vector with all 0s and a 1 in the most visited child
                 index = np.argmax(visit_vector)
                 pi = np.zeros(visit_vector.size)
                 pi[index] = 1
                 return pi
 
-        def _self_play_(num, env, mcts):
-            game_buffer = []
+        game_buffer = []
 
-            #Play num games
-            for _ in range(num):
-                #Initialize game
-                observation = env.reset()
-                game_data = []
-                self.temperature = t_equals_one
-                s = time.time()
+        # Play num games
+        for _ in range(num):
+            # Initialize game
+            observation = self._env.reset()
+            game_data = []
+            self.temperature = temperature
+            s = time.time()
 
-                #Loop until game ends
-                while True:
-                    #Choose move from MCTS
-                    action = mcts.move(observation)
-                    
-                    #Calculate Pi vector
-                    pi = make_policy(env, mcts.stats['actions'], self.temperature) 
-                    #Update temperature parameter
-                    self.temperature = max(0, self.temperature - 1)                    
-                    #Store move data: (board, turn, pi)
-                    game_data.append((observation, env.to_play, pi))
-                    
-                    #Perform move
-                    observation, _, done, _ = env.step(action)
-                    #Update MCTS (used to recycle tree for next move) 
-                    mcts.update(action)
-                    
-                    if done:
-                        #If game is over: exit loop
-                        print(f"game finished in {time.time() - s}")
-                        break
+            # Loop until game ends
+            while True:
+                # Choose move from MCTS
+                action = self._mcts.move(observation)
 
-                #Store winner in all states gathered
-                #Change winner perspective whether white or black has won
-                perspective = 1 if game_data[-1][1] == 1 else -1
-                #Iterate list in reversed order (and modifying it)
-                for i in range(len(game_data) - 1, -1, -1):
-                    # TODO turns may not switch every time,
-                    #  check when generalizing
-                    #Store winner in move data according to turn perspective
-                    game_data[i] += (perspective * env.winner(),)
-                    perspective *= -1
+                # Calculate Pi vector
+                pi = make_policy(self._env, self._mcts.stats['actions'])
+                # Update temperature parameter
+                self.temperature = max(0, self.temperature - 1)
+                # Store move data: (board, turn, pi)
+                game_data.append((observation, self._env.to_play, pi))
 
-                #Add game states to buffer: (board, turn, pi, winner)
-                game_buffer.extend(game_data)
+                # Perform move
+                observation, _, done, _ = self._env.step(action)
+                # Update MCTS (used to recycle tree for next move)
+                self._mcts.update(action)
 
-            return game_buffer
+                if done:
+                    # If game is over: exit loop
+                    print(f"game finished in {time.time() - s}")
+                    break
 
-        # TODO mover esto a la función anterior
-        if max_workers is None:
-            return _self_play_(games, self._env, self._mcts)
+            # Store winner in all states gathered
+            # Change winner perspective whether white or black has won
+            perspective = 1 if game_data[-1][1] == 1 else -1
+            # Iterate list in reversed order (and modifying it)
+            for i in range(len(game_data) - 1, -1, -1):
+                # TODO turns may not switch every time,
+                #  check when generalizing
+                # Store winner in move data according to turn perspective
+                game_data[i] += (perspective * self._env.winner(),)
+                perspective *= -1
 
-        d_games = games // max_workers
-        r_games = games % max_workers
-        n_games = [d_games] * max_workers
-        if r_games != 0:
-            for i in range(r_games):
-                n_games[i] += 1
+            # Add game states to buffer: (board, turn, pi, winner)
+            game_buffer.extend(game_data)
 
-        envs = [copy.deepcopy(self._env) for _ in range(max_workers)]
-        mctss = [MonteCarloTree(env, **self.mcts_kwargs) for env in envs]
-        args = zip(n_games, envs, mctss)
-
-        bufs = Parallel(max_workers, backend='threading')(
-            delayed(_self_play_)(g, env, mcts) for g, env, mcts in args
-        )
-        return list(itertools.chain.from_iterable(bufs))
+        return game_buffer
 
     def move(self, observation):
         self.temperature = 0
@@ -247,29 +244,61 @@ class AlphaZero(Strategy):
         self._mcts.update(action)
 
     def save(self, path):
+        """Saves the internal neural network model in the given path.
+
+        Args:
+            path (str): Where to save the model.
+
+        """
         self.neural_network.save_model(path)
 
     def load(self, path):
+        """Restores the internal neural network model from the given path.
+
+        Args:
+            path (str): Where to load the model from.
+
+        """
         self.neural_network.load_model(path)
 
+    def get_weights(self):
+        """Retrieves the weights of the internal neural network model.
+
+        Returns:
+            [numpy.ndarray]: Weights of the internal neural network.
+
+        """
+        return self.neural_network.model.get_weights()
+
+    def set_weights(self, weights):
+        """Sets the weights of the internal neural network from Numpy arrays.
+
+        Args:
+            weights ({__len__}):
+
+        """
+        self.neural_network.model.set_weights(weights)
+
     def _value_function(self, node):
-        #Convert node to network input format
-        nn_input = np.array([self._convert_to_network_input(node.observation, node.to_play)])
+        # Convert node to network input format
+        nn_input = np.array([
+            self._convert_to_network_input(node.observation, node.to_play)
+        ])
         
-        #Predict Node with Neural Network
+        # Predict Node with Neural Network
         predictions = self.neural_network.predict(nn_input)
         
-        #Extract output data
+        # Extract output data
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
         
-        #Assign probabilities to children
+        # Assign probabilities to children
         for i, child in node.children.items():
             child.probability = probabilities[i]
 
         return reward
 
-    def _best_node_policy(self, children) :
+    def _best_node_policy(self, children):
         """Function representing the best node policy from AlphaZero
         used by the Monte Carlo Tree Search
 
@@ -291,7 +320,7 @@ class AlphaZero(Strategy):
             distribution = np.cumsum(visit_vector / visit_vector.sum())
             return np.argmax(distribution > sample)
         else:
-            # t -> 0 | Explotation | Node with highest visit count
+            # t -> 0 | Exploitation | Node with highest visit count
             return np.argmax(visit_vector)
 
     @staticmethod
@@ -306,20 +335,14 @@ class AlphaZero(Strategy):
         white = board.copy()
         white[white == -1] = 0
 
-        #All 1 if black to play, all 0 if white to play
+        # All 1 if black to play, all 0 if white to play
         player = 0 if to_play == 1 else 1
         turn = np.full(board.shape, player)
 
-        #Join layers together with channel_last
-        input = np.stack((black, white, turn), axis = 2)
+        # Join layers together with channel_last
+        input = np.stack((black, white, turn), axis=2)
 
         return input
-
-    def get_weights(self):
-        return self.neural_network.model.get_weights()
-
-    def set_weights(self, weights):
-        self.neural_network.model.set_weights(weights)
 
 
 class QPlusU:
@@ -359,17 +382,49 @@ class QPlusU:
 
 
 def create_alphazero(game, max_workers=None,
+                     buffer_size=config.BUFFER_SIZE,
                      self_play_times=config.SELF_PLAY_TIMES,
                      max_train_time=config.MAX_TRAIN_TIME,
-                     max_train_error=config.MAX_TRAIN_ERROR,
+                     min_train_error=config.MIN_TRAIN_ERROR,
                      max_games_counter=config.MAX_GAMES_COUNTER,
                      batch_size=config.BATCH_SIZE,
-                     buffer_size=config.BUFFER_SIZE,
                      epochs=config.EPOCHS,
-                     t_equals_one=config.T_EQUALS_ONE,
+                     temperature=config.T_EQUALS_ONE,
                      *args, **kwargs):
+    """Creates and trains a new instance of AlphaZero.
+
+    This function allow parallel training whereas AlphaZero.train does not.
+
+    Args:
+        game (tfg.games.GameEnv): Game AlphaZero is for.
+        max_workers(int): Number of processes that will be used.
+        buffer_size (int): Max number of states that can be stored before
+            training. If this maximum is reached, oldest states will be
+            removed when adding new ones. This is used inside this function
+            and the actor will be created using this parameter as well.
+        self_play_times (int): Number of games played before retraining
+            the net.
+        max_train_time (float): Maximum time the training can last.
+        min_train_error (float): Minimum error bellow which the training
+            will stop.
+        max_games_counter (int): Maximum total number of games that can
+            be played before stopping training.
+        epochs (int): Number of epochs each batch will be trained with.
+        batch_size (int): Size of the batch to be sampled of all moves to
+            train the network after self_play_times games have been played.
+        temperature (int): During first moves of each game actions are
+            taken randomly. This parameters sets how many times this will
+            be done.
+        *args: Other arguments passed to AlphaZero's constructor starting
+            after game.
+        **kwargs: Other keyword arguments passed to AlphaZero's constructor.
+
+    """
 
     if max_workers is None:
+        actor = AlphaZero(game, *args, buffer_size=buffer_size, **kwargs)
+        actor.train(self_play_times, max_train_time, min_train_error,
+                    max_games_counter, epochs, batch_size, temperature)
         raise NotImplementedError("not implemented yet")
 
     import ray
@@ -381,20 +436,22 @@ def create_alphazero(game, max_workers=None,
         done = False
         if max_train_time is not None:
             done |= (current_time - start_time) > max_train_time
-        if max_train_error is not None:
-            done |= current_error < max_train_error
-        # if max_games_counter is not None:
-        #     done |= games_counter > max_games_counter
+        if min_train_error is not None:
+            done |= current_error < min_train_error
+        if max_games_counter is not None:
+            done |= games_counter > max_games_counter
 
         return done
 
     AZ = ray.remote(AlphaZero)
-    azs = [AZ.remote(game, *args, **kwargs) for _ in range(max_workers)]
-    actor = AlphaZero(game, *args, **kwargs)
+    azs = [AZ.remote(game, *args, buffer_size=buffer_size, gpu=False, **kwargs)
+           for _ in range(max_workers)]
+    actor = AlphaZero(game, *args, buffer_size=buffer_size, **kwargs)
 
     start_time = time.time()
     current_time = start_time
     current_error = float('inf')
+    games_counter = 0
 
     buffer = collections.deque(maxlen=buffer_size)
 
@@ -406,7 +463,7 @@ def create_alphazero(game, max_workers=None,
             n_games[i] += 1
 
     while not is_done():
-        futures = [az._self_play.remote(g, None, t_equals_one)
+        futures = [az._self_play.remote(g, temperature)
                    for az, g in zip(azs, n_games)]
         moves = ray.get(futures)
         for m in moves:
@@ -436,5 +493,7 @@ def create_alphazero(game, max_workers=None,
 
         current_error = history.history['loss'][-1]
         current_time = time.time()
+        games_counter += self_play_times
+        print(f"Games played: {games_counter}")
 
     return actor
