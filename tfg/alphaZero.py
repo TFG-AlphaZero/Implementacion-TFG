@@ -89,7 +89,8 @@ class AlphaZero(Strategy):
               max_games_counter=config.MAX_GAMES_COUNTER,
               epochs=config.EPOCHS,
               batch_size=config.BATCH_SIZE,
-              temperature=config.T_EQUALS_ONE):
+              temperature=config.T_EQUALS_ONE,
+              callbacks=None):
         """Trains the internal neural network via self-play to learn how to
         play the game.
 
@@ -109,6 +110,9 @@ class AlphaZero(Strategy):
             temperature (int): During first moves of each game actions are
                 taken randomly. This parameters sets how many times this will
                 be done.
+            callbacks (list[tfg.alphaZeroCallbacks.Callback]): Functions that
+                will be called after every game and after every set of games to
+                join the results.
 
         """
         def is_done():
@@ -125,7 +129,7 @@ class AlphaZero(Strategy):
             if min_train_error is not None:
                 done |= current_error < min_train_error
             if max_games_counter is not None:
-                done |= games_counter > max_games_counter
+                done |= games_counter >= max_games_counter
 
             return done
 
@@ -137,9 +141,15 @@ class AlphaZero(Strategy):
 
         while not is_done():
             # Add to buffer the latest played games
-            self._buffer.extend(
-                self._self_play(self_play_times, temperature)
+            moves, callback_results = self._self_play(
+                self_play_times, temperature, callbacks
             )
+            self._buffer.extend(moves)
+
+            # Join callbacks
+            if callbacks is not None:
+                for callback, results in zip(callbacks, callback_results):
+                    callback.join(results)
 
             # Extract a mini-batch from buffer
             size = min(len(self._buffer), batch_size)
@@ -167,7 +177,7 @@ class AlphaZero(Strategy):
             games_counter += self_play_times
             print(f"Games played: {games_counter}")
 
-    def _self_play(self, num, temperature):
+    def _self_play(self, num, temperature, callbacks):
         def make_policy(env, nodes):
             """Returns the pi vector according to temperature parameter."""
             # Obtain visit vector from children
@@ -189,6 +199,8 @@ class AlphaZero(Strategy):
                 return pi
 
         game_buffer = []
+        callback_results = ([list() for _ in callbacks]
+                            if callbacks is not None else [])
 
         # Play num games
         for _ in range(num):
@@ -234,7 +246,12 @@ class AlphaZero(Strategy):
             # Add game states to buffer: (board, turn, pi, winner)
             game_buffer.extend(game_data)
 
-        return game_buffer
+            # Add callback results
+            if callbacks is not None:
+                for callback, result in zip(callbacks, callback_results):
+                    result.append(callback.on_game_end(game_data))
+
+        return game_buffer, callback_results
 
     def move(self, observation):
         self.temperature = 0
@@ -265,7 +282,7 @@ class AlphaZero(Strategy):
         """Retrieves the weights of the internal neural network model.
 
         Returns:
-            [numpy.ndarray]: Weights of the internal neural network.
+            list[numpy.ndarray]: Weights of the internal neural network.
 
         """
         return self.neural_network.model.get_weights()
@@ -390,6 +407,7 @@ def create_alphazero(game, max_workers=None,
                      batch_size=config.BATCH_SIZE,
                      epochs=config.EPOCHS,
                      temperature=config.T_EQUALS_ONE,
+                     callbacks=None,
                      *args, **kwargs):
     """Creates and trains a new instance of AlphaZero.
 
@@ -415,6 +433,9 @@ def create_alphazero(game, max_workers=None,
         temperature (int): During first moves of each game actions are
             taken randomly. This parameters sets how many times this will
             be done.
+        callbacks (list[tfg.alphaZeroCallbacks.Callback]): Functions that
+            will be called after every game and after every set of games to
+            join the results.
         *args: Other arguments passed to AlphaZero's constructor starting
             after game.
         **kwargs: Other keyword arguments passed to AlphaZero's constructor.
@@ -425,7 +446,7 @@ def create_alphazero(game, max_workers=None,
         actor = AlphaZero(game, *args, buffer_size=buffer_size, **kwargs)
         actor.train(self_play_times, max_train_time, min_train_error,
                     max_games_counter, epochs, batch_size, temperature)
-        raise NotImplementedError("not implemented yet")
+        return actor
 
     import ray
 
@@ -439,7 +460,7 @@ def create_alphazero(game, max_workers=None,
         if min_train_error is not None:
             done |= current_error < min_train_error
         if max_games_counter is not None:
-            done |= games_counter > max_games_counter
+            done |= games_counter >= max_games_counter
 
         return done
 
@@ -463,9 +484,17 @@ def create_alphazero(game, max_workers=None,
             n_games[i] += 1
 
     while not is_done():
-        futures = [az._self_play.remote(g, temperature)
+        futures = [az._self_play.remote(g, temperature, callbacks)
                    for az, g in zip(azs, n_games)]
-        moves = ray.get(futures)
+        moves, callback_results = zip(*ray.get(futures))
+
+        # Join callbacks
+        if callbacks is not None:
+            # For each worker
+            for callback_results_ in callback_results:
+                for callback, results in zip(callbacks, callback_results_):
+                    callback.join(results)
+
         for m in moves:
             buffer.extend(m)
 

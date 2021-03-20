@@ -600,11 +600,9 @@ class MonteCarloTree(Strategy):
         # Finally choose the best action at the root according to the policy
         actions, children = zip(*root.children.items())
         # Ensure same ordering of children and actions
-        # TODO fix this to work with AlphaZero
         actions = list(actions)
         children = list(children)
 
-        # index = self._best_node_policy(root.children)
         index = self._best_node_policy(children)
         self._save_stats(root, i, time.time() - start)
         return actions[index]
