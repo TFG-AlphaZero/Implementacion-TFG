@@ -51,23 +51,21 @@ class AlphaZero(Strategy):
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
         self._env = env
-
         # FIXME we shouldn't use config here
         self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
+        self.c_puct = c_puct
+        self.temperature = 0
+        self._buffer = collections.deque(maxlen=buffer_size)
 
         self._mcts = MonteCarloTree(
             self._env,
             max_iter=mcts_iter,
             max_time=mcts_max_time,
-            selection_policy=QPlusU(c_puct),
+            selection_policy=self._selection_policy,
             value_function=self._value_function,
             best_node_policy=self._best_node_policy,
             reset_tree=False
         )
-
-        self._buffer = collections.deque(maxlen=buffer_size)
-
-        self.temperature = 0
 
         if nn_config.output_dim is None:
             # Try using same output dim as action space size
@@ -177,8 +175,9 @@ class AlphaZero(Strategy):
             games_counter += self_play_times
             print(f"Games played: {games_counter}")
 
-            for callback in callbacks:
-                callback.on_update_end(self)
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback.on_update_end(self)
 
     def _self_play(self, num, temperature, callbacks):
         def make_policy(env, nodes):
@@ -361,6 +360,29 @@ class AlphaZero(Strategy):
             # t -> 0 | Exploitation | Node with highest visit count
             return np.argmax(visit_vector)
 
+    def _selection_policy(self, root, children):
+        """Function representing the Q + U formula. (Deep RL)
+        
+        In the step of select, the action is selected by the formula:
+        a = argmax(Q(s,a) + U(s,a)) where
+        - Q(s,a) = W/N encourages the exploitation
+        - U(s,a) = c_puct * P(s,a) * sqrt(Sum_b N(s,b)) / 1 + N(s,a) encourages
+          the exploration
+        
+        and c_puct is a parameter determining the exploration scale.
+        """
+        Q = np.array([child.value for child in children])
+        
+        visits = np.array([child.visit_count for child in children])
+        probabilities = np.array([child.probability for child in children])
+
+        U = self.c_puct * probabilities * (
+                np.sqrt(root.visit_count) / (1 + visits)
+        )
+
+        res = Q + U
+        return np.argmax(res)
+
     @staticmethod
     def _convert_to_network_input(board, to_play):
         """Converts from raw board and turn format
@@ -381,43 +403,6 @@ class AlphaZero(Strategy):
         input = np.stack((black, white, turn), axis=2)
 
         return input
-
-
-class QPlusU:
-    """Class representing the Q + U formula. (Deep RL)
-    
-    In the step of select, the action is selected by the formula 
-    a = argmax(Q(s,a) + U(s,a)) where Q(s,a) = W/N encourages the exploitation
-    and U(s,a) = c_puct * P(s,a) * sqrt(Sum_b N(s,b)) / 1 + N(s,a) encourages
-    the exploration.
-    
-    c_puct is a parameter determining the exploration scale (5 for AlphaZero).
-
-    It is a functional class: (MonteCarloTreeNode, [MonteCarloTreeNode]) -> int.
-    """
-
-    def __init__(self, c_puct):
-        """
-
-        Args:
-            c_puct (float): Exploration scale constant.
-
-        """
-        self.c_puct = c_puct
-
-    def __call__(self, root, children):
-        Q = np.array([child.value for child in children])
-        
-        visits = np.array([child.visit_count for child in children])
-        probabilities = np.array([child.probability for child in children])
-
-        U = self.c_puct * probabilities * (
-                np.sqrt(root.visit_count) / (1 + visits)
-        )
-
-        res = Q + U
-        return np.argmax(res)
-
 
 def create_alphazero(game, max_workers=None,
                      buffer_size=config.BUFFER_SIZE,
@@ -538,8 +523,9 @@ def create_alphazero(game, max_workers=None,
                                            validation_split=0)
 
         weights = actor.get_weights()
-        for callback in callbacks:
-            callback.on_update_end(actor)
+        if callbacks is not None:
+            for callback in callbacks:
+                callback.on_update_end(actor)
         futures = [az.set_weights.remote(weights) for az in azs]
         ray.get(futures)
 

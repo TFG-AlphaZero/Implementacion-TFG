@@ -412,14 +412,14 @@ class MonteCarloTree(Strategy):
                 simulating a game starting from the expanded node. Otherwise,
                 the given function will be used and simulation_policy will be
                 ignored.
-            value_pov (str): Determines if the valur function returns values
+            value_pov (str): Determines if the value function returns values
                 from the point of view of the player to play in that state
                 ('to_play', default) or, rather, the value means which color
-                is expected to win, independantly of the current turn
+                is expected to win, independently of the current turn
                 ('winner'). For example, if black plays and is expected to
                 win, with the first option the value function should return
-                something positive, whereas in the second case something
-                negative should be returned.
+                a positive value, whereas in the second case a negative
+                value should be returned.
             update_function (function, optional): Function that will be used
                 to update the value of custom statistics of each node during
                 node creation and backpropagation. Must be a void function that
