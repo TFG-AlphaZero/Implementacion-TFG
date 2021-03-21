@@ -40,6 +40,17 @@ class Callback:
         """
         pass
 
+    def on_update_end(self, actor, info=None):
+        """Called after each training of the weights.
+
+        Args:
+            actor (tfg.alphaZero.AlphaZero): Actor being trained.
+            info (dict): Dict containing some relevant info about the training.
+                TODO what
+
+        """
+        pass
+
 
 class PositionCheckerCallback(Callback):
 
@@ -63,3 +74,23 @@ class PositionCheckerCallback(Callback):
                     self.states[state] = 1
                 else:
                     self.states[state] += 1
+
+
+class Checkpoint(Callback):
+
+    def __init__(self, prefix="checkpoint", directory='checkpoints', delay=1,
+                 verbose=True):
+        self.prefix = prefix
+        self.directory = directory
+        self.delay = delay
+        self._counter = 0
+        self.verbose = verbose
+
+    def on_update_end(self, actor, info=None):
+        self._counter += 1
+        if self._counter % self.delay == 0:
+            n = str(self._counter // self.delay)
+            path = self.directory + '/' + self.prefix + n + '.h5'
+            actor.save(path)
+            if self.verbose:
+                print(f"Checkpoint saved at {path}")

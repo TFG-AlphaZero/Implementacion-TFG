@@ -51,7 +51,12 @@ class AlphaZero(Strategy):
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
         self._env = env
-        self.mcts_kwargs = dict(
+
+        # FIXME we shouldn't use config here
+        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
+
+        self._mcts = MonteCarloTree(
+            self._env,
             max_iter=mcts_iter,
             max_time=mcts_max_time,
             selection_policy=QPlusU(c_puct),
@@ -59,11 +64,6 @@ class AlphaZero(Strategy):
             best_node_policy=self._best_node_policy,
             reset_tree=False
         )
-
-        # FIXME we shouldn't use config here
-        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
-
-        self._mcts = MonteCarloTree(self._env, **self.mcts_kwargs)
 
         self._buffer = collections.deque(maxlen=buffer_size)
 
@@ -177,6 +177,9 @@ class AlphaZero(Strategy):
             games_counter += self_play_times
             print(f"Games played: {games_counter}")
 
+            for callback in callbacks:
+                callback.on_update_end(self)
+
     def _self_play(self, num, temperature, callbacks):
         def make_policy(env, nodes):
             """Returns the pi vector according to temperature parameter."""
@@ -259,6 +262,24 @@ class AlphaZero(Strategy):
 
     def update(self, action):
         self._mcts.update(action)
+
+    def set_max_iter(self, max_iter):
+        """Sets max_iter attribute of the internal MCTS.
+
+        Args:
+            max_iter (int): Maximum number of iterations of MCTS.
+
+        """
+        self._mcts.max_iter = max_iter
+
+    def set_max_time(self, max_time):
+        """Sets max_time attribute of the internal MCTS.
+
+        Args:
+            max_time (float): Maximum time the MCTS algorithm can run.
+
+        """
+        self._mcts.max_time = max_time
 
     def save(self, path):
         """Saves the internal neural network model in the given path.
@@ -517,6 +538,8 @@ def create_alphazero(game, max_workers=None,
                                            validation_split=0)
 
         weights = actor.get_weights()
+        for callback in callbacks:
+            callback.on_update_end(actor)
         futures = [az.set_weights.remote(weights) for az in azs]
         ray.get(futures)
 
