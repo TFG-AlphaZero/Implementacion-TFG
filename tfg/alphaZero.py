@@ -10,7 +10,7 @@ import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
-from scipy.special import softmax
+
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
@@ -79,6 +79,8 @@ class AlphaZero(Strategy):
             **nn_config.__dict__
         )
 
+        self.training = True
+
     @property
     def env(self):
         """tfg.games.GameEnv: Game this strategy is for."""
@@ -133,6 +135,8 @@ class AlphaZero(Strategy):
                 done |= games_counter >= max_games_counter
 
             return done
+
+        self.training = True
 
         # Initialize finishing parameters
         start_time = time.time()
@@ -253,6 +257,7 @@ class AlphaZero(Strategy):
 
     def move(self, observation):
         self.temperature = 0
+        self.training = False
         return self._mcts.move(observation)
 
     def update(self, action):
@@ -324,26 +329,30 @@ class AlphaZero(Strategy):
         # Extract output data
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
-
-        #Obtain legal actions
-        legal_actions = list(node.children.keys())
-        #Obtain only legal probabilities and softmax them
-        probabilities = softmax(probabilities[legal_actions])
         
         # Add exploration noise if node is root 
-        if node.root :
+        if self.training and node.root:
             alpha = np.full(len(probabilities), self.noise_alpha)
             noise = np.random.dirichlet(alpha, size=1)
-            probabilities = (1 - self.noise_fraction) * probabilities \
-                            + self.noise_fraction * noise[0]
+            probabilities = ((1 - self.noise_fraction) * probabilities
+                             + self.noise_fraction * noise[0])
 
-        #Create dictionary to assign probabilities properly as
-        #children.items() may not have same order than legal_actions
-        prob_dic = dict(zip(legal_actions, probabilities))
+        # Obtain legal actions
+        legal_actions = list(node.children.keys())
+
+        # Obtain only legal probabilities and interpolate them
+        mask = np.zeros_like(probabilities, dtype=bool)
+        mask[legal_actions] = True
+        probabilities[mask] /= probabilities[mask].sum()
+        probabilities[~mask] = 0
+
+        # Create dictionary to assign probabilities properly as
+        # children.items() may not have same order than legal_actions
+        # prob_dic = dict(zip(legal_actions, probabilities))
 
         # Assign probabilities to children
-        for action, child in node.children.items():
-            child.probability = prob_dic[action]
+        for action in legal_actions:
+            node.children[action].probability = probabilities[action]
 
         return reward
 
@@ -415,6 +424,7 @@ class AlphaZero(Strategy):
         input = np.stack((black, white, turn), axis=2)
 
         return input
+
 
 def create_alphazero(game, max_workers=None,
                      buffer_size=config.BUFFER_SIZE,
