@@ -1,28 +1,31 @@
 import numpy as np
 from strategies import Strategy
+from tfg.alphaZero import AlphaZero
 
 class Debugger():
 
     def __init__(self, alphaZero):
         self.alphaZero = alphaZero
+        np.set_printoptions(suppress=True)
+        np.set_printoptions(precision=2)
 
     def test_nn(self):
         search_board = np.array([[0, 0, -1],
                                  [0, 1, 0],
                                  [0, 0, 0]])
-        search_play = 1
+        search_turn = 1
         
         X = np.array([AlphaZero._convert_to_network_input(search_board, search_turn)])
         print("================ \n Neural Network Input: \n", X)
 
-        predictions = alphaZero.neural_network.predict(x = X)
+        predictions = self.alphaZero.neural_network.predict(x = X)
         print("\nPredicted reward: ", predictions[0][0][0], '\nPredicted probabilities: ', predictions[1][0])
 
     def get_boards(self):
         search_board = np.array([[0, 0, -1],
                                  [0, 1, 0],
                                  [0, 0, 0]])
-        search_play = 1
+        search_turn = 1
 
         buffer = self.alphaZero._buffer
         buffer_board = []
@@ -69,26 +72,13 @@ class NeuralNetworkToPlay(Strategy):
         player = self.env.to_play
         legal_actions = observation.flatten()
         
-        nn_input = np.array([self._convert_to_network_input(observation, player)])
+        nn_input = np.array([AlphaZero._convert_to_network_input(observation, player)])
         predictions = self.neural_network.predict(nn_input)
         
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
         
-        #np.set_printoptions(suppress=True)
-        #np.set_printoptions(precision=2)
         #print(reward, probabilities)
         
         probabilities[legal_actions != 0] = 0
         return np.argmax(probabilities)
-
-    def _convert_to_network_input(self, board, to_play):
-        black = board.copy()
-        black[black == 1] = 0
-        black[black == -1] = 1
-        white = board.copy()
-        white[white == -1] = 0
-        player = 0 if to_play == 1 else 1
-        turn = np.full(board.shape, player)
-        input = np.stack((black, white, turn), axis = 2)
-        return input

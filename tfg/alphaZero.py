@@ -89,7 +89,7 @@ class AlphaZero(Strategy):
               max_games_counter=config.MAX_GAMES_COUNTER,
               epochs=config.EPOCHS,
               batch_size=config.BATCH_SIZE,
-              temperature=config.T_EQUALS_ONE,
+              temperature=config.TEMPERATURE,
               callbacks=None):
         """Trains the internal neural network via self-play to learn how to
         play the game.
@@ -100,7 +100,7 @@ class AlphaZero(Strategy):
             self_play_times (int): Number of games played before retraining
                 the net.
             max_train_time (float): Maximum time the training can last.
-            min_train_error (float): Minimum error bellow which the training
+            min_train_error (float): Minimum error below which the training
                 will stop.
             max_games_counter (int): Maximum total number of games that can
                 be played before stopping training.
@@ -119,7 +119,7 @@ class AlphaZero(Strategy):
             """Training ends if any of the following conditions is met:
                 - Training time is over (current_time > max_train_time).
                 - Error is lower than threshold
-                    (current_error < max_train_error).
+                    (current_error < min_train_error).
                 - Max number of played games reached
                     (games_counter > max_games_counter).
             """
@@ -154,12 +154,12 @@ class AlphaZero(Strategy):
             # Extract a mini-batch from buffer
             size = min(len(self._buffer), batch_size)
             mini_batch = random.sample(self._buffer, size)
-            
+
             # Separate data from batch
             boards, turns, pies, rewards = zip(*mini_batch)
             train_board = np.array([
-                self._convert_to_network_input(boards[i], turns[i])
-                for i in range(len(boards))]
+                self._convert_to_network_input(board, turn)
+                for board, turn in zip(boards, turns)]
             )
             train_pi = np.array(list(pies))
             train_reward = np.array(list(rewards))
@@ -427,7 +427,7 @@ def create_alphazero(game, max_workers=None,
                      max_games_counter=config.MAX_GAMES_COUNTER,
                      batch_size=config.BATCH_SIZE,
                      epochs=config.EPOCHS,
-                     temperature=config.T_EQUALS_ONE,
+                     temperature=config.TEMPERATURE,
                      callbacks=None,
                      *args, **kwargs):
     """Creates and trains a new instance of AlphaZero.
@@ -523,15 +523,15 @@ def create_alphazero(game, max_workers=None,
         mini_batch = random.sample(buffer, size)
 
         boards, turns, pies, rewards = zip(*mini_batch)
-        x_train = np.array([
+        train_board = np.array([
             actor._convert_to_network_input(board, turn)
             for board, turn in zip(boards, turns)
         ])
-        train_prob = np.array(list(pies))
+        train_pi = np.array(list(pies))
         train_reward = np.array(list(rewards))
 
-        history = actor.neural_network.fit(x=x_train,
-                                           y=[train_reward, train_prob],
+        history = actor.neural_network.fit(x=train_board,
+                                           y=[train_reward, train_pi],
                                            batch_size=32,
                                            epochs=epochs,
                                            verbose=2,
