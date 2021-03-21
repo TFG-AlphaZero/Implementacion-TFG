@@ -4,6 +4,7 @@
 MCTS_ITER = 50 #At least two iterations required
 C_PUCT = 1
 MCTS_MAX_TIME = None
+EXPLORATION_NOISE = (0.25, 1) #(noise_fraction, Dirichlet_alpha)
 
 # 2) Neural Network Parameters
 LEARNING_RATE = 0.01

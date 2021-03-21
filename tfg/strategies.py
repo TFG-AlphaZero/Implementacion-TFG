@@ -286,6 +286,7 @@ class MonteCarloTreeNode(dict):
         self.value_squared_sum = 0
         self.value_variance = np.inf
         self.children = dict()
+        self.root = False
 
     def expanded(self):
         """Returns whether this node has already been expanded or not.
@@ -372,7 +373,6 @@ class MonteCarloTree(Strategy):
     def __init__(self, env, max_iter=None, max_time=None,
                  selection_policy=None,
                  value_function=None,
-                 value_pov='to_play',
                  update_function=None,
                  best_node_policy=None,
                  reset_tree=True):
@@ -411,15 +411,9 @@ class MonteCarloTree(Strategy):
                 If this parameter is None the value will be estimated by
                 simulating a game starting from the expanded node. Otherwise,
                 the given function will be used and simulation_policy will be
-                ignored.
-            value_pov (str): Determines if the value function returns values
-                from the point of view of the player to play in that state
-                ('to_play', default) or, rather, the value means which color
-                is expected to win, independently of the current turn
-                ('winner'). For example, if black plays and is expected to
-                win, with the first option the value function should return
-                a positive value, whereas in the second case a negative
-                value should be returned.
+                ignored. 
+                Caution, the value returned by this function must mean which
+                color is expected to win, independently of the current turn.
             update_function (function, optional): Function that will be used
                 to update the value of custom statistics of each node during
                 node creation and backpropagation. Must be a void function that
@@ -462,11 +456,6 @@ class MonteCarloTree(Strategy):
         )
 
         self._value_function = value_function
-
-        if value_pov not in ('to_play', 'winner'):
-            raise ValueError("value_pov should be one of to_play or winner;"
-                             f"found: {value_pov}")
-        self._value_pov = value_pov
 
         self._update_function = update_function
 
@@ -531,7 +520,6 @@ class MonteCarloTree(Strategy):
         player = self._env.to_play
 
         # Initialize tree
-        # TODO exploration noise?
         if self._root is None:
             root = MonteCarloTreeNode(observation, player)
             if not self.reset_tree:
@@ -540,6 +528,7 @@ class MonteCarloTree(Strategy):
             root = self._root
 
         i = 0
+        root.root = True
         # Iterate the algorithm max_iter times
         while time_left():
             # Reset search every iteration
@@ -572,8 +561,6 @@ class MonteCarloTree(Strategy):
                 else:
                     # Estimate via value_function
                     reward = self._value_function(current_node)
-                    if self._value_pov == 'to_play':
-                        reward *= env.to_play
 
             # Backpropagation phase
             # Who played the move that lead to that node

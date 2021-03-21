@@ -10,7 +10,7 @@ import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
-
+from scipy.special import softmax
 
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
@@ -18,6 +18,7 @@ class AlphaZero(Strategy):
     # TODO add custom action/observation encoders/decoders
     def __init__(self, env,
                  c_puct=config.C_PUCT,
+                 exploration_noise = config.EXPLORATION_NOISE,
                  mcts_iter=config.MCTS_ITER,
                  mcts_max_time=config.MCTS_MAX_TIME,
                  buffer_size=config.BUFFER_SIZE,
@@ -54,6 +55,8 @@ class AlphaZero(Strategy):
         # FIXME we shouldn't use config here
         self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
         self.c_puct = c_puct
+        self.noise_fraction = exploration_noise[0]
+        self.noise_alpha = exploration_noise[1]
         self.temperature = 0
         self._buffer = collections.deque(maxlen=buffer_size)
 
@@ -235,15 +238,8 @@ class AlphaZero(Strategy):
                     break
 
             # Store winner in all states gathered
-            # Change winner perspective whether white or black has won
-            perspective = 1 if game_data[-1][1] == 1 else -1
-            # Iterate list in reversed order (and modifying it)
-            for i in range(len(game_data) - 1, -1, -1):
-                # TODO turns may not switch every time,
-                #  check when generalizing
-                # Store winner in move data according to turn perspective
-                game_data[i] += (perspective * self._env.winner(),)
-                perspective *= -1
+            for i in range(len(game_data)):
+                game_data[i] += (self._env.winner(),)
 
             # Add game states to buffer: (board, turn, pi, winner)
             game_buffer.extend(game_data)
@@ -328,10 +324,26 @@ class AlphaZero(Strategy):
         # Extract output data
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
+
+        #Obtain legal actions
+        legal_actions = list(node.children.keys())
+        #Obtain only legal probabilities and softmax them
+        probabilities = softmax(probabilities[legal_actions])
         
+        # Add exploration noise if node is root 
+        if node.root :
+            alpha = np.full(len(probabilities), self.noise_alpha)
+            noise = np.random.dirichlet(alpha, size=1)
+            probabilities = (1 - self.noise_fraction) * probabilities \
+                            + self.noise_fraction * noise[0]
+
+        #Create dictionary to assign probabilities properly as
+        #children.items() may not have same order than legal_actions
+        prob_dic = dict(zip(legal_actions, probabilities))
+
         # Assign probabilities to children
-        for i, child in node.children.items():
-            child.probability = probabilities[i]
+        for action, child in node.children.items():
+            child.probability = prob_dic[action]
 
         return reward
 
