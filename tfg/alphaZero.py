@@ -18,10 +18,9 @@ class AlphaZero(Strategy):
     # TODO add custom action/observation encoders/decoders
     def __init__(self, env,
                  c_puct=config.C_PUCT,
-                 exploration_noise = config.EXPLORATION_NOISE,
+                 exploration_noise=config.EXPLORATION_NOISE,
                  mcts_iter=config.MCTS_ITER,
                  mcts_max_time=config.MCTS_MAX_TIME,
-                 buffer_size=config.BUFFER_SIZE,
                  nn_config=None,
                  gpu=True):
         """All default values are taken from tfg.alphaZeroConfig
@@ -30,11 +29,13 @@ class AlphaZero(Strategy):
             env (tfg.games.GameEnv): Game this strategy is for.
             c_puct (float): C constant used in the selection policy PUCT
                 algorithm.
+            exploration_noise ((float, float)): Values used to add Dirichlet
+                noise to the first node of MCTS. First number is the noise
+                fraction (between 0 and 1), which means how much noise will
+                be added. The second number is the alpha of the Dirichlet
+                distribution.
             mcts_iter (int): Max iterations of the MCTS algorithm.
             mcts_max_time (float): Max time for the MCTS algorithm.
-            buffer_size (int): Max number of states that can be stored before
-                training. If this maximum is reached, oldest states will be
-                removed when adding new ones.
             nn_config (tfg.alphaZeroConfig.AlphaZeroConfig or dict):
                 Wrapper with arguments that will be directly passed to
                 tfg.alphaZeroNN.AlphaZeroNN. If output_dim is None,
@@ -58,7 +59,7 @@ class AlphaZero(Strategy):
         self.noise_fraction = exploration_noise[0]
         self.noise_alpha = exploration_noise[1]
         self.temperature = 0
-        self._buffer = collections.deque(maxlen=buffer_size)
+        self._buffer = None
 
         self._mcts = MonteCarloTree(
             self._env,
@@ -67,7 +68,7 @@ class AlphaZero(Strategy):
             selection_policy=self._selection_policy,
             value_function=self._value_function,
             best_node_policy=self._best_node_policy,
-            reset_tree=False
+            reset_tree=True
         )
 
         if nn_config.output_dim is None:
@@ -91,6 +92,7 @@ class AlphaZero(Strategy):
               min_train_error=config.MIN_TRAIN_ERROR,
               max_games_counter=config.MAX_GAMES_COUNTER,
               epochs=config.EPOCHS,
+              buffer_size=config.BUFFER_SIZE,
               batch_size=config.BATCH_SIZE,
               temperature=config.TEMPERATURE,
               callbacks=None):
@@ -108,6 +110,9 @@ class AlphaZero(Strategy):
             max_games_counter (int): Maximum total number of games that can
                 be played before stopping training.
             epochs (int): Number of epochs each batch will be trained with.
+            buffer_size (int): Max number of states that can be stored before
+                training. If this maximum is reached, oldest states will be
+                removed when adding new ones.
             batch_size (int): Size of the batch to be sampled of all moves to
                 train the network after self_play_times games have been played.
             temperature (int): During first moves of each game actions are
@@ -137,6 +142,7 @@ class AlphaZero(Strategy):
             return done
 
         self.training = True
+        self._mcts.reset_tree = True
 
         # Initialize finishing parameters
         start_time = time.time()
@@ -144,12 +150,16 @@ class AlphaZero(Strategy):
         current_error = float('inf')
         games_counter = 0
 
+        buffer = collections.deque(maxlen=buffer_size)
+        # TODO remove this (here just for compatibility with debugger)
+        self._buffer = buffer
+
         while not is_done():
             # Add to buffer the latest played games
             moves, callback_results = self._self_play(
                 self_play_times, temperature, callbacks
             )
-            self._buffer.extend(moves)
+            buffer.extend(moves)
 
             # Join callbacks
             if callbacks is not None:
@@ -157,15 +167,15 @@ class AlphaZero(Strategy):
                     callback.join(results)
 
             # Extract a mini-batch from buffer
-            size = min(len(self._buffer), batch_size)
-            mini_batch = random.sample(self._buffer, size)
+            size = min(len(buffer), batch_size)
+            mini_batch = random.sample(buffer, size)
 
             # Separate data from batch
             boards, turns, pies, rewards = zip(*mini_batch)
             train_board = np.array([
                 self._convert_to_network_input(board, turn)
-                for board, turn in zip(boards, turns)]
-            )
+                for board, turn in zip(boards, turns)
+            ])
             train_pi = np.array(list(pies))
             train_reward = np.array(list(rewards))
 
@@ -187,10 +197,10 @@ class AlphaZero(Strategy):
                     callback.on_update_end(self)
 
     def _self_play(self, num, temperature, callbacks):
-        def make_policy(env, nodes):
+        def make_policy(nodes):
             """Returns the pi vector according to temperature parameter."""
             # Obtain visit vector from children
-            visit_vector = np.zeros(env.action_space.n)
+            visit_vector = np.zeros(self._env.action_space.n)
             for action, node in nodes.items():
                 # TODO We are assuming action is an int or a tuple,
                 #  check when generalizing
@@ -225,7 +235,7 @@ class AlphaZero(Strategy):
                 action = self._mcts.move(observation)
 
                 # Calculate Pi vector
-                pi = make_policy(self._env, self._mcts.stats['actions'])
+                pi = make_policy(self._mcts.stats['actions'])
                 # Update temperature parameter
                 self.temperature = max(0, self.temperature - 1)
                 # Store move data: (board, turn, pi)
@@ -237,13 +247,20 @@ class AlphaZero(Strategy):
                 self._mcts.update(action)
 
                 if done:
+                    # Nothing to do
+                    # TODO generalize this
+                    n = self._env.action_space.n
+                    pi = np.full(n, 1 / n)
+                    game_data.append((observation, self._env.to_play, pi))
                     # If game is over: exit loop
                     print(f"game finished in {time.time() - s}")
                     break
 
             # Store winner in all states gathered
+            winner = self._env.winner()
             for i in range(len(game_data)):
-                game_data[i] += (self._env.winner(),)
+                to_play = game_data[i][1]
+                game_data[i] += (winner * to_play,)
 
             # Add game states to buffer: (board, turn, pi, winner)
             game_buffer.extend(game_data)
@@ -258,6 +275,7 @@ class AlphaZero(Strategy):
     def move(self, observation):
         self.temperature = 0
         self.training = False
+        self._mcts.reset_tree = False
         return self._mcts.move(observation)
 
     def update(self, action):
@@ -329,13 +347,6 @@ class AlphaZero(Strategy):
         # Extract output data
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
-        
-        # Add exploration noise if node is root 
-        if self.training and node.root:
-            alpha = np.full(len(probabilities), self.noise_alpha)
-            noise = np.random.dirichlet(alpha, size=1)
-            probabilities = ((1 - self.noise_fraction) * probabilities
-                             + self.noise_fraction * noise[0])
 
         # Obtain legal actions
         legal_actions = list(node.children.keys())
@@ -346,9 +357,15 @@ class AlphaZero(Strategy):
         probabilities[mask] /= probabilities[mask].sum()
         probabilities[~mask] = 0
 
-        # Create dictionary to assign probabilities properly as
-        # children.items() may not have same order than legal_actions
-        # prob_dic = dict(zip(legal_actions, probabilities))
+        # Add exploration noise if node is root
+        if self.training and node.root:
+            alpha = np.full(len(legal_actions), self.noise_alpha)
+            # TODO according to Numpy we should use a newer Dirichlet function
+            noise, = np.random.dirichlet(alpha, size=1)
+            probabilities[mask] = (
+                    (1 - self.noise_fraction) * probabilities[mask]
+                    + self.noise_fraction * noise
+            )
 
         # Assign probabilities to children
         for action in legal_actions:
@@ -446,8 +463,7 @@ def create_alphazero(game, max_workers=None,
         max_workers(int): Number of processes that will be used.
         buffer_size (int): Max number of states that can be stored before
             training. If this maximum is reached, oldest states will be
-            removed when adding new ones. This is used inside this function
-            and the actor will be created using this parameter as well.
+            removed when adding new ones.
         self_play_times (int): Number of games played before retraining
             the net.
         max_train_time (float): Maximum time the training can last.
@@ -471,7 +487,7 @@ def create_alphazero(game, max_workers=None,
     """
 
     if max_workers is None:
-        actor = AlphaZero(game, *args, buffer_size=buffer_size, **kwargs)
+        actor = AlphaZero(game, *args, **kwargs)
         actor.train(self_play_times, max_train_time, min_train_error,
                     max_games_counter, epochs, batch_size, temperature)
         return actor
@@ -493,9 +509,9 @@ def create_alphazero(game, max_workers=None,
         return done
 
     AZ = ray.remote(AlphaZero)
-    azs = [AZ.remote(game, *args, buffer_size=buffer_size, gpu=False, **kwargs)
+    azs = [AZ.remote(game, *args, gpu=False, **kwargs)
            for _ in range(max_workers)]
-    actor = AlphaZero(game, *args, buffer_size=buffer_size, **kwargs)
+    actor = AlphaZero(game, *args, **kwargs)
 
     start_time = time.time()
     current_time = start_time

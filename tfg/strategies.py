@@ -380,18 +380,16 @@ class MonteCarloTree(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_iter (int, optional): Total number of iterations of the
-                algorithm for each move. If not set, the algorithm will run
-                until there is no time left. Either max_iter or max_time (or
-                both) must be set.
-            max_time (float, optional): Maximum amount of seconds the
-                algorithm will be running for each move. If not set, the
-                algorithm will run exactly max_iter iterations. Time spent
-                during selection of the final move will not be taken into
-                account. Either max_iter or max_time (or both) must be set.
-            selection_policy (function or str, optional): Function that will
-                be used to select a child during selection phase Can be
-                either a function
+            max_iter (int): Total number of iterations of the algorithm for
+                each move. If not set, the algorithm will run until there is
+                no time left. Either max_iter or max_time (or both) must be set.
+            max_time (float): Maximum amount of seconds the algorithm will be
+                running for each move. If not set, the algorithm will run
+                exactly max_iter iterations. Time spent during selection of
+                the final move will not be taken into account. Either
+                max_iter or max_time (or both) must be set.
+            selection_policy (function or str): Function that will be used to
+                select a child during selection phase Can be either a function
                     (root: MonteCarloTreeNode,
                     children: [MonteCarloTreeNode]) -> selected_index: int,
                 or a string representing the function to apply, one of the
@@ -403,36 +401,36 @@ class MonteCarloTree(Strategy):
                 backpropagation algorithm which value to pass, linearly
                 transforming original rewards returned by the game or
                 value_function from [-1, 1] to value_range.
-            value_function (function, optional): Function that will be used
-                to compute the estimated value of a newly expanded node. Must
-                be a function
+            value_function (function): Function that will be used to compute
+                the estimated value of a newly expanded node. Must be a function
                     (node: MonteCarloTreeNode) -> value: number
                 that may also modify any of the custom attributes of the node.
                 If this parameter is None the value will be estimated by
                 simulating a game starting from the expanded node. Otherwise,
                 the given function will be used and simulation_policy will be
-                ignored. 
-                Caution, the value returned by this function must mean which
-                color is expected to win, independently of the current turn.
-            update_function (function, optional): Function that will be used
-                to update the value of custom statistics of each node during
-                node creation and backpropagation. Must be a void function that
+                ignored.
+                Caution, the value returned by this function means the
+                likelihood of winning for the player to play in the current
+                state.
+            update_function (function): Function that will be used to update
+                the value of custom statistics of each node during node
+                creation and backpropagation. Must be a void function that
                 takes MonteCarloTreeNode as its unique argument. It is up to
                 the caller to make sure that custom attributes are properly
                 created during node's construction.
-            best_node_policy (function or str, optional): Function that will
-                be used to select the returned action at the end of the
-                algorithm. Can be either a function
+            best_node_policy (function or str): Function that will be used to
+                select the returned action at the end of the algorithm. Can
+                be either a function
                     (nodes: [MonteCarloTreeNode]) -> index: number
                 or a string representing the function to apply, one of the
                 following: {'robust', 'max', 'secure'}, where 'robust'
                 selects the node with higher visit count, 'max' the one with
                 highest value and 'secure' uses tfg.strategies.SecureChild
                 formula with A=4. Defaults to 'robust'.
-            reset_tree (bool, optional): Whether to reset the game tree after
-                each call to move or keep it for the next call. Defaults to
-                True (reset). If set to False all moves must be reported via
-                the update method.
+            reset_tree (bool): Whether to reset the game tree after each call
+                to move or keep it for the next call. Defaults to True
+                (reset). If set to False all moves must be reported via the
+                update method.
 
         """
         if max_iter is None and max_time is None:
@@ -560,7 +558,8 @@ class MonteCarloTree(Strategy):
                     reward = self._simulate(env)
                 else:
                     # Estimate via value_function
-                    reward = self._value_function(current_node)
+                    to_play = self._env.to_play
+                    reward = self._value_function(current_node) * to_play
 
             # Backpropagation phase
             # Who played the move that lead to that node
