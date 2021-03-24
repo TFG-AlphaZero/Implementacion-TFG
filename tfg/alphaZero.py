@@ -15,8 +15,7 @@ from tfg.alphaZeroNN import NeuralNetworkAZ
 class AlphaZero(Strategy):
     """Game strategy implementing AlphaZero algorithm."""
 
-    # TODO add custom action/observation encoders/decoders
-    def __init__(self, env,
+    def __init__(self, env, adapter,
                  c_puct=config.C_PUCT,
                  exploration_noise=config.EXPLORATION_NOISE,
                  mcts_iter=config.MCTS_ITER,
@@ -27,6 +26,8 @@ class AlphaZero(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
+            adapter (tfg.alphaZeroAdapters.NeuralNetworkAdapter): Adapter for
+                the game given as env.
             c_puct (float): C constant used in the selection policy PUCT
                 algorithm.
             exploration_noise ((float, float)): Values used to add Dirichlet
@@ -53,8 +54,6 @@ class AlphaZero(Strategy):
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
         self._env = env
-        # FIXME we shouldn't use config here
-        self.input_dim = self._env.observation_space.shape + config.INPUT_LAYERS
         self.c_puct = c_puct
         self.noise_fraction = exploration_noise[0]
         self.noise_alpha = exploration_noise[1]
@@ -70,15 +69,13 @@ class AlphaZero(Strategy):
             best_node_policy=self._best_node_policy,
             reset_tree=True
         )
-
-        if nn_config.output_dim is None:
-            # Try using same output dim as action space size
-            nn_config.output_dim = self._env.action_space.n
         
         self.neural_network = NeuralNetworkAZ(
-            input_dim=self.input_dim,
+            input_dim=adapter.input_shape,
+            output_dim=adapter.output_shape,
             **nn_config.__dict__
         )
+        self._adapter = adapter
 
         self.training = True
 
@@ -173,7 +170,7 @@ class AlphaZero(Strategy):
             # Separate data from batch
             boards, turns, pies, rewards = zip(*mini_batch)
             train_board = np.array([
-                self._convert_to_network_input(board, turn)
+                self._adapter.to_input(board, turn)
                 for board, turn in zip(boards, turns)
             ])
             train_pi = np.array(list(pies))
@@ -200,11 +197,10 @@ class AlphaZero(Strategy):
         def make_policy(nodes):
             """Returns the pi vector according to temperature parameter."""
             # Obtain visit vector from children
-            visit_vector = np.zeros(self._env.action_space.n)
+            visit_vector = np.zeros(self._adapter.output_shape)
             for action, node in nodes.items():
-                # TODO We are assuming action is an int or a tuple,
-                #  check when generalizing
-                visit_vector[action] = node.visit_count
+                indices = self._adapter.to_indices(action)
+                visit_vector[indices] = node.visit_count
 
             if self.temperature > 0:
                 # t = 1 | Exploration
@@ -212,8 +208,9 @@ class AlphaZero(Strategy):
             else:
                 # t -> 0 | Exploitation
                 # Vector with all 0s and a 1 in the most visited child
-                index = np.argmax(visit_vector)
-                pi = np.zeros(visit_vector.size)
+                index = np.unravel_index(np.argmax(visit_vector),
+                                         visit_vector.shape)
+                pi = np.zeros_like(visit_vector)
                 pi[index] = 1
                 return pi
 
@@ -248,10 +245,10 @@ class AlphaZero(Strategy):
 
                 if done:
                     # Nothing to do
-                    # TODO generalize this
-                    n = self._env.action_space.n
-                    pi = np.full(n, 1 / n)
-                    game_data.append((observation, self._env.to_play, pi))
+                    # TODO not sure if this state should be appended or not
+                    # n = self._env.action_space.n
+                    # pi = np.full(n, 1 / n)
+                    # game_data.append((observation, self._env.to_play, pi))
                     # If game is over: exit loop
                     print(f"game finished in {time.time() - s}")
                     break
@@ -338,7 +335,7 @@ class AlphaZero(Strategy):
     def _value_function(self, node):
         # Convert node to network input format
         nn_input = np.array([
-            self._convert_to_network_input(node.observation, node.to_play)
+            self._adapter.to_input(node.observation, node.to_play)
         ])
         
         # Predict Node with Neural Network
@@ -350,10 +347,15 @@ class AlphaZero(Strategy):
 
         # Obtain legal actions
         legal_actions = list(node.children.keys())
+        legal_indices = [self._adapter.to_indices(action)
+                         for action in legal_actions]
+        # Expand indices if necessary
+        mask_indices = (legal_indices if len(probabilities.shape) == 1 else
+                        tuple(zip(*legal_indices)))
 
         # Obtain only legal probabilities and interpolate them
         mask = np.zeros_like(probabilities, dtype=bool)
-        mask[legal_actions] = True
+        mask[mask_indices] = True
         probabilities[mask] /= probabilities[mask].sum()
         probabilities[~mask] = 0
 
@@ -368,8 +370,8 @@ class AlphaZero(Strategy):
             )
 
         # Assign probabilities to children
-        for action in legal_actions:
-            node.children[action].probability = probabilities[action]
+        for action, indices in zip(legal_actions, legal_indices):
+            node.children[action].probability = probabilities[indices]
 
         return reward
 
@@ -421,6 +423,7 @@ class AlphaZero(Strategy):
         res = Q + U
         return np.argmax(res)
 
+    # TODO remove
     @staticmethod
     def _convert_to_network_input(board, to_play):
         """Converts from raw board and turn format
@@ -443,7 +446,7 @@ class AlphaZero(Strategy):
         return input
 
 
-def create_alphazero(game, max_workers=None,
+def create_alphazero(game, adapter, max_workers=None,
                      buffer_size=config.BUFFER_SIZE,
                      self_play_times=config.SELF_PLAY_TIMES,
                      max_train_time=config.MAX_TRAIN_TIME,
@@ -460,6 +463,7 @@ def create_alphazero(game, max_workers=None,
 
     Args:
         game (tfg.games.GameEnv): Game AlphaZero is for.
+        adapter (NeuralNetworkAdapter): Adapter for the game given as env.
         max_workers(int): Number of processes that will be used.
         buffer_size (int): Max number of states that can be stored before
             training. If this maximum is reached, oldest states will be
@@ -481,13 +485,13 @@ def create_alphazero(game, max_workers=None,
             will be called after every game and after every set of games to
             join the results.
         *args: Other arguments passed to AlphaZero's constructor starting
-            after game.
+            after adapter.
         **kwargs: Other keyword arguments passed to AlphaZero's constructor.
 
     """
 
     if max_workers is None:
-        actor = AlphaZero(game, *args, **kwargs)
+        actor = AlphaZero(game, adapter, *args, **kwargs)
         actor.train(self_play_times, max_train_time, min_train_error,
                     max_games_counter, epochs, batch_size, temperature)
         return actor
@@ -509,9 +513,9 @@ def create_alphazero(game, max_workers=None,
         return done
 
     AZ = ray.remote(AlphaZero)
-    azs = [AZ.remote(game, *args, gpu=False, **kwargs)
+    azs = [AZ.remote(game, adapter, *args, gpu=False, **kwargs)
            for _ in range(max_workers)]
-    actor = AlphaZero(game, *args, **kwargs)
+    actor = AlphaZero(game, adapter, *args, **kwargs)
 
     start_time = time.time()
     current_time = start_time
@@ -547,8 +551,7 @@ def create_alphazero(game, max_workers=None,
 
         boards, turns, pies, rewards = zip(*mini_batch)
         train_board = np.array([
-            actor._convert_to_network_input(board, turn)
-            for board, turn in zip(boards, turns)
+            adapter.to_input(board, turn) for board, turn in zip(boards, turns)
         ])
         train_pi = np.array(list(pies))
         train_reward = np.array(list(rewards))

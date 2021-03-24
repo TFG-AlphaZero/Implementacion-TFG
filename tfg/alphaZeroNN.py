@@ -1,8 +1,6 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import numpy as np
-
 
 class NeuralNetworkAZ:
 
@@ -23,8 +21,6 @@ class NeuralNetworkAZ:
         self.residual_layers = residual_layers
         
         self.model = self._create_model(filters, kernel_size)
-        # Initialize predictions to make them thread safe
-        self.model.predict(np.zeros(shape=(1,) + self.model.input_shape[1:]))
 
     def _create_model(self, filters, kernel_size):
         import tensorflow as tf
