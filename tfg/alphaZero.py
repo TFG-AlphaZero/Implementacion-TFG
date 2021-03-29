@@ -72,7 +72,7 @@ class AlphaZero(Strategy):
         
         self.neural_network = NeuralNetworkAZ(
             input_dim=adapter.input_shape,
-            output_dim=adapter.output_shape,
+            output_dim=adapter.output_features,
             **nn_config.__dict__
         )
         self._adapter = adapter
@@ -169,7 +169,7 @@ class AlphaZero(Strategy):
 
             # Separate data from batch
             boards, turns, pies, rewards = zip(*mini_batch)
-            train_board = np.array([
+            train_boards = np.array([
                 self._adapter.to_input(board, turn)
                 for board, turn in zip(boards, turns)
             ])
@@ -177,7 +177,7 @@ class AlphaZero(Strategy):
             train_reward = np.array(list(rewards))
 
             # Train neural network with the data from the mini-batch
-            history = self.neural_network.fit(x=train_board,
+            history = self.neural_network.fit(x=train_boards,
                                               y=[train_reward, train_pi],
                                               batch_size=32,
                                               epochs=epochs,
@@ -197,7 +197,7 @@ class AlphaZero(Strategy):
         def make_policy(nodes):
             """Returns the pi vector according to temperature parameter."""
             # Obtain visit vector from children
-            visit_vector = np.zeros(self._adapter.output_shape)
+            visit_vector = np.zeros(self._adapter.output_features)
             for action, node in nodes.items():
                 indices = self._adapter.to_indices(action)
                 visit_vector[indices] = node.visit_count
@@ -222,6 +222,7 @@ class AlphaZero(Strategy):
         for _ in range(num):
             # Initialize game
             observation = self._env.reset()
+            self._mcts.update(None)
             game_data = []
             self.temperature = temperature
             s = time.time()
@@ -550,13 +551,13 @@ def create_alphazero(game, adapter, max_workers=None,
         mini_batch = random.sample(buffer, size)
 
         boards, turns, pies, rewards = zip(*mini_batch)
-        train_board = np.array([
+        train_boards = np.array([
             adapter.to_input(board, turn) for board, turn in zip(boards, turns)
         ])
         train_pi = np.array(list(pies))
         train_reward = np.array(list(rewards))
 
-        history = actor.neural_network.fit(x=train_board,
+        history = actor.neural_network.fit(x=train_boards,
                                            y=[train_reward, train_pi],
                                            batch_size=32,
                                            epochs=epochs,

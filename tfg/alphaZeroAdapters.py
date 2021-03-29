@@ -3,32 +3,27 @@ import numpy as np
 from tfg.games import BLACK, WHITE
 
 
-# TODO implement multi dim option
 class NeuralNetworkAdapter:
     """Abstract class with methods to convert an observation to network input
-    (matching input_shape attribute) and its output (with output_shape shape)
-    to an action.
+    (matching input_shape attribute) and its output (with output_features
+    features) to an action.
 
     This class should not be used directly, but rather should be extended for
     every game.
 
     """
 
-    def __init__(self, input_shape, output_shape):
+    def __init__(self, input_shape, output_features):
         """
         Args:
-            input_shape ((int, int, int)): Shape of the arrays returned by
-                to_input. Used to set neural network's input shape.
-            output_shape (int or (int, int, int)): Shape of the arrays
-                outputted by neural network's policy head and passed as
-                argument of from_output. If int, the neural network will use
-                a dense layer as output with output_shape neurons. If tuple,
-                a convolution with the given shape will be used instead.
+            input_shape ((int, int, int)): Shape of the in input
+                representing a board state for the neural network.
+            output_features (int): Number of features representing an action
+                for the game.
         """
         self.input_shape = input_shape
-        self.output_shape = output_shape
+        self.output_features = output_features
 
-    # TODO might need previous observations as they do in AlphaZero
     def to_input(self, observation, to_play):
         """Converts an observation given by a tfg.games.GameEnv to a valid
         input for the neural network with shape input_shape.
@@ -60,6 +55,7 @@ class NeuralNetworkAdapter:
 
 
 class TicTacToeAdapter(NeuralNetworkAdapter):
+    """Adapts input and actions for Tic Tac Toe."""
 
     def __init__(self):
         super(TicTacToeAdapter, self).__init__((3, 3, 3), 9)
