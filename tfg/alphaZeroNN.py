@@ -46,7 +46,8 @@ class NeuralNetworkAZ:
                           'value_head': tf.keras.losses.MeanSquaredError(),
                           'policy_head': tf.keras.losses.CategoricalCrossentropy()
                       },
-                      loss_weights={'value_head': 0.5, 'policy_head': 0.5}
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5},
+                      metrics=['acc']
                       )
 
         return model
