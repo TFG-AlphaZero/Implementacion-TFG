@@ -1,8 +1,8 @@
 """In this file, every alphaZero parameter is set"""
 
 # 1) MCTS Parameters
-MCTS_ITER = 50 #At least two iterations required
-C_PUCT = 1
+MCTS_ITER = 100 #At least two iterations required
+C_PUCT = 4
 MCTS_MAX_TIME = None
 EXPLORATION_NOISE = (0.25, 1) #(noise_fraction, Dirichlet_alpha)
 
@@ -11,7 +11,7 @@ LEARNING_RATE = 0.01
 EPOCHS = 10
 REGULARIZER_CONST = 0.0001
 MOMENTUM = 0.9
-RESIDUAL_LAYERS = 5
+RESIDUAL_LAYERS = 19
 CONV_FILTERS = 64
 CONV_KERNEL_SIZE = (3, 3)
 INPUT_LAYERS = (3,)
@@ -19,7 +19,7 @@ INPUT_LAYERS = (3,)
 # 3) Train Parameters
 MAX_TRAIN_TIME = None
 MIN_TRAIN_ERROR = None
-MAX_GAMES_COUNTER = 500
+MAX_GAMES_COUNTER = 100
 
 SELF_PLAY_TIMES = 10
 TEMPERATURE = 12
