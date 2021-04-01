@@ -1,7 +1,7 @@
 import numpy as np
 import tfg.alphaZeroConfig as config
 
-from strategies import Strategy, Minimax
+from tfg.strategies import Strategy, Minimax
 from tfg.alphaZero import AlphaZero
 from tfg.alphaZeroNN import NeuralNetworkAZ
 from matplotlib import pyplot as plt
@@ -58,10 +58,9 @@ class Debugger(Strategy):
         plt.title("Model Loss")
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
+        plt.ylim(0, 10)
         plt.legend(['Train', 'Validation'], loc='upper left')
-
         plt.savefig(path)
-        plt.show()
 
     def _self_play(self, max_games_counter):
         game_buffer = []
