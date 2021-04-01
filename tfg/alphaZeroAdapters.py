@@ -69,3 +69,25 @@ class TicTacToeAdapter(NeuralNetworkAdapter):
 
     def to_indices(self, action):
         return action
+
+
+class ConnectNAdapter(NeuralNetworkAdapter):
+    """Adapts input and actions for Connect N."""
+
+    def __init__(self, env):
+        """
+        Args:
+            env (game.connect_n.ConnectN): Connect N game being adapted.
+        """
+        rows, cols = env.observation_space.shape
+        super(ConnectNAdapter, self).__init__((rows, cols, 3), cols)
+
+    def to_input(self, observation, to_play):
+        array = np.zeros(shape=self.input_shape)
+        array[observation == WHITE, 0] = 1
+        array[observation == BLACK, 1] = 1
+        array[..., 2] = 0 if to_play == WHITE else 1
+        return array
+
+    def to_indices(self, action):
+        return action

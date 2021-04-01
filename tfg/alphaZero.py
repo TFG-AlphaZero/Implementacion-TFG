@@ -10,6 +10,9 @@ import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
+from tfg.util import play
+from tfg.games import BLACK, WHITE
+from functools import reduce
 
 
 class AlphaZero(Strategy):
@@ -189,9 +192,15 @@ class AlphaZero(Strategy):
             games_counter += self_play_times
             print(f"Games played: {games_counter}")
 
+            info = {
+                'error': current_error,
+                'time': current_time - start_time,
+                'games': games_counter
+            }
+
             if callbacks is not None:
                 for callback in callbacks:
-                    callback.on_update_end(self)
+                    callback.on_update_end(self, info)
 
     def _self_play(self, num, temperature, callbacks):
         def make_policy(nodes):
@@ -543,15 +552,54 @@ def create_alphazero(game, adapter, max_workers=None,
                                            validation_split=0)
 
         weights = actor.get_weights()
-        if callbacks is not None:
-            for callback in callbacks:
-                callback.on_update_end(actor)
-        futures = [az.set_weights.remote(weights) for az in azs]
-        ray.get(futures)
 
         current_error = history.history['loss'][-1]
         current_time = time.time()
         games_counter += self_play_times
+
+        info = {
+            'error': current_error,
+            'time': current_time - start_time,
+            'games': games_counter,
+            'remote_actors': azs
+        }
+
         print(f"Games played: {games_counter}")
 
+        if callbacks is not None:
+            for callback in callbacks:
+                callback.on_update_end(actor, info)
+        futures = [az.set_weights.remote(weights) for az in azs]
+        ray.get(futures)
+
     return actor
+
+
+def parallel_play(game, adapter, rival, weights_file, color, games=100,
+                  max_workers=4, *args, **kwargs):
+    import ray
+
+    if not ray.is_initialized():
+        ray.init(log_to_driver=False)
+
+    AZ = ray.remote(AlphaZero)
+    if color in (WHITE, 'white'):
+        AZ.play = ray.remote(lambda self, n: play(game, self, rival, games=n))
+    elif color in (BLACK, 'black'):
+        AZ.play = ray.remote(lambda self, n: play(game, rival, self, games=n))
+    else:
+        raise ValueError(f"invalid color: {color} "
+                         f"(expected 'white' (1) or 'black' (-1))")
+    azs = [AZ.remote(game, adapter, *args, gpu=False, **kwargs)
+           for _ in range(max_workers)]
+    ray.get([az.load(weights_file) for az in azs])
+
+    d_games = games // max_workers
+    r_games = games % max_workers
+    n_games = [d_games] * max_workers
+    if r_games != 0:
+        for i in range(r_games):
+            n_games[i] += 1
+
+    results = ray.get([az.play(n) for az, n in zip(azs, n_games)])
+    return reduce(lambda acc, x: map(sum, zip(acc, x)), results)

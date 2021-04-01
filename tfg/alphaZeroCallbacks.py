@@ -40,7 +40,7 @@ class Callback:
         """
         pass
 
-    def on_update_end(self, actor, info=None):
+    def on_update_end(self, actor, info):
         """Called after each training of the weights.
 
         Args:
@@ -94,3 +94,80 @@ class Checkpoint(Callback):
             actor.save(path)
             if self.verbose:
                 print(f"Checkpoint saved at {path}")
+
+
+class ParamScheduler(Callback):
+
+    def __init__(self,
+                 mtcs_iter_schedule=None,
+                 lr_schedule=None,
+                 verbose=True):
+
+        self.mcts_iter_schedule = self._convert_schedule(mtcs_iter_schedule)
+        self.lr_schedule = self._convert_schedule(lr_schedule)
+
+        self.verbose = verbose
+
+    def on_update_end(self, actor, info):
+        self._update_max_iter(actor, info)
+        self._update_lr(actor, info)
+
+    def _update_max_iter(self, actor, info):
+        if not self.mcts_iter_schedule:
+            return
+        games = info['games']
+        max_iter = self._get_next(self.mcts_iter_schedule, games)
+        if max_iter is None:
+            return
+        actor.set_max_iter(max_iter)
+        if 'remote_actors' in info:
+            import ray
+            ray.get([az.set_max_iter.remote(max_iter)
+                     for az in info['remote_actors']])
+        if self.verbose:
+            print(f"max_iter set: {max_iter}")
+
+    def _update_lr(self, actor, info):
+        if not self.lr_schedule:
+            return
+        games = info['games']
+        lr = self._get_next(self.lr_schedule, games)
+        if lr is None:
+            return
+        actor.neural_network.model.optimizer.lr.assign(lr)
+        if self.verbose:
+            print(f"learning_rate set: {lr}")
+
+    @staticmethod
+    def _get_next(schedule, games):
+        result = None
+        while schedule and games >= schedule[0][0]:
+            result = schedule.pop(0)[1]
+        return result
+
+    @staticmethod
+    def _convert_schedule(schedule):
+        if schedule is None:
+            return None
+        if isinstance(schedule, dict):
+            schedule = schedule.items()
+        return list(sorted(schedule))
+
+
+class GameStore(Callback):
+
+    def __init__(self):
+        self.games = []
+
+    def on_game_end(self, game):
+        boards = list()
+        for state in game:
+            board = state[0]
+            boards.append(board)
+        return boards
+
+    def join(self, games):
+        self.games.extend(games)
+
+    def print(self, index):
+        print(*self.games[index], sep='\n\n')
