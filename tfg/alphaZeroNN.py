@@ -46,8 +46,7 @@ class NeuralNetworkAZ:
                           'value_head': tf.keras.losses.MeanSquaredError(),
                           'policy_head': tf.keras.losses.CategoricalCrossentropy()
                       },
-                      loss_weights={'value_head': 0.5, 'policy_head': 0.5},
-                      metrics=['acc']
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5}
                       )
 
         return model
@@ -213,41 +212,9 @@ class NeuralNetworkAZ:
         from tensorflow.keras.models import load_model
         self.model = load_model(path)
 
-"""
-#Example of use provided below!
-def _convert_to_network_input(board, to_play):
-    black = board.copy()
-    black[black == 1] = 0
-    black[black == -1] = 1
-    white = board.copy()
-    white[white == -1] = 0
-    player = 0 if to_play == 1 else 1
-    turn = np.full(board.shape, player)
-    input = np.stack((black, white, turn), axis = 2)
-    return input
+    def plot_model(self, path):
+        from tensorflow.keras.utils import plot_model
+        plot_model(self.model, to_file=path, show_shapes = True)
 
-input_dimension = (3, 3) + (3,)
-output_dimension = 9
-import tfg.alphaZeroConfig as config
-
-nn_test = NeuralNetworkAZ(learning_rate= config.LEARNING_RATE, regularizer_constant = config.REGULARIZER_CONST, momentum = config.MOMENTUM,
-                          input_dim = input_dimension, output_dim = output_dimension, 
-                          residual_layers=config.RESIDUAL_LAYERS, filters = config.CONV_FILTERS, kernel_size=config.CONV_KERNEL_SIZE)
-#nn_test.model.summary()
-#tf.keras.utils.plot_model(nn_test.model, show_shapes=True)
-
-search_board = np.array([[0, 0, -1],
-                         [0, 1, 0],
-                         [0, 0, 0]])
-search_turn = 1
-b_size = 25
-
-train_X = np.array([_convert_to_network_input(search_board, search_turn) for i in range(b_size)])        
-train_Y = np.array([1 for i in range(b_size)])
-train_Z = np.array([[1,0,0,0,0,0,0,0,0] for i in range(b_size)], dtype=float)
-
-nn_test.fit(x = train_X, y = [train_Y, train_Z], batch_size = b_size, epochs = 25, verbose = 2, validation_split = 0)
-predictions = nn_test.predict(x = np.array([train_X[-1]]))
-print(predictions)
-#print(predictions[0][0][0], predictions[1][0], tf.keras.losses.CategoricalCrossentropy()(train_Z[0], predictions[1][0]).numpy())
-"""
+    def summary_model(self):
+        self.model.summary()

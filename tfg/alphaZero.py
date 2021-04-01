@@ -424,28 +424,6 @@ class AlphaZero(Strategy):
         res = Q + U
         return np.argmax(res)
 
-    # TODO remove
-    @staticmethod
-    def _convert_to_network_input(board, to_play):
-        """Converts from raw board and turn format
-        into neural network format
-        """
-        black = board.copy()
-        black[black == 1] = 0
-        black[black == -1] = 1
-
-        white = board.copy()
-        white[white == -1] = 0
-
-        # All 1 if black to play, all 0 if white to play
-        player = 0 if to_play == 1 else 1
-        turn = np.full(board.shape, player)
-
-        # Join layers together with channel_last
-        input = np.stack((black, white, turn), axis=2)
-
-        return input
-
 
 def create_alphazero(game, adapter, max_workers=None,
                      buffer_size=config.BUFFER_SIZE,

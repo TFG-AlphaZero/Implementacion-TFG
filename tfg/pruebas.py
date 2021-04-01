@@ -7,7 +7,7 @@ from tfg.strategies import Minimax, HumanStrategy
 from tfg.util import enable_gpu, play
 from tfg.alphaZero import AlphaZero, create_alphazero
 from game.tictactoe import TicTacToe, encode, decode
-from tfg.debugger import Debugger, NeuralNetworkToPlay
+from tfg.debugger import Debugger
 from tfg.alphaZeroAdapters import TicTacToeAdapter
 
 if __name__ == '__main__':
@@ -15,33 +15,31 @@ if __name__ == '__main__':
 
     game = TicTacToe()
 
-    alphaZero = create_alphazero(game, TicTacToeAdapter(),
-                                 self_play_times=1, max_games_counter=20,
-                                 buffer_size=32, batch_size=16, mcts_iter=100)
+    #alphaZero = create_alphazero(game, TicTacToeAdapter(),
+    #                             self_play_times=1, max_games_counter=20,
+    #                             buffer_size=32, batch_size=16, mcts_iter=100)
     
-    alphaZero = AlphaZero(game)
+    #alphaZero = AlphaZero(game, adapter=TicTacToeAdapter())
     #alphaZero.load('models/TicTacToe400Iteraciones.h5')
     #alphaZero.train(callbacks=[callback])
     #alphaZero.save('models/TicTacToeParallel.h5')
 
-    debugger = Debugger(alphaZero.neural_network, game)
-    #debugger.load("models/Debugger1.h5")
-    debugger.train_supervised_nn(max_games_counter=500, epochs=1500)
-    debugger.save("models/Debugger1.h5")
-    #search_board = np.array([[0, -1, -1],
-    #                         [0, 1, 1],
-    #                         [0, 0, 1]])
-    #search_turn = -1
-    #debugger.test_nn(search_board, search_turn)
-    #debugger.get_boards()
-    #debugger.print_buffer()
+    #debugger = Debugger(game, adapter=TicTacToeAdapter())
+    #debugger.load("models/Debugger2.h5")
+    #history = debugger.train_supervised_nn(max_games_counter=100, epochs=250)
+    #debugger.plot_history(history, "models/Debugger2Loss")
+    #debugger.save("models/Debugger2.h5")
+    #debugger.test_nn()
 
-    results = play(game, Minimax(game), alphaZero, games=100)
-    # print(results)
-    #
-    # results = play(game, alphaZero, Minimax(game), games=100)
-    # print(results)
-    #
-    # results = play(game, alphaZero, HumanStrategy(game), render=True,
-    #                print_results=True)
+    #Play as black against Minimax
+    #results = play(game, Minimax(game), debugger, games=10)
+    #print(results)
+    
+    #Play as white against Minimax
+    #results = play(game, debugger, Minimax(game), games=10)
+    #print(results)
+    
+    #Play against human
+    #results = play(game, HumanStrategy(game), debugger, render=True,
+    #               print_results=True)
     #print(results)
