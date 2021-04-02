@@ -85,15 +85,20 @@ def play(game, white, black, games=1, max_workers=None,
     if max_workers is None:
         return play_(games)
 
+    n_games = get_games_per_worker(games, max_workers)
+
+    results = Parallel(max_workers)(delayed(play_)(g) for g in n_games)
+    return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
+
+
+def get_games_per_worker(games, max_workers):
     d_games = games // max_workers
     r_games = games % max_workers
     n_games = [d_games] * max_workers
     if r_games != 0:
         for i in range(r_games):
             n_games[i] += 1
-
-    results = Parallel(max_workers)(delayed(play_)(g) for g in n_games)
-    return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
+    return n_games
 
 
 def enable_gpu():

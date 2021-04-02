@@ -10,9 +10,10 @@ import tfg.alphaZeroConfig as config
 
 from tfg.strategies import Strategy, MonteCarloTree
 from tfg.alphaZeroNN import NeuralNetworkAZ
-from tfg.util import play
+from tfg.util import play, get_games_per_worker
 from tfg.games import BLACK, WHITE
 from functools import reduce
+from joblib import delayed, Parallel
 
 
 class AlphaZero(Strategy):
@@ -512,12 +513,7 @@ def create_alphazero(game, adapter, max_workers=None,
 
     buffer = collections.deque(maxlen=buffer_size)
 
-    d_games = self_play_times // max_workers
-    r_games = self_play_times % max_workers
-    n_games = [d_games] * max_workers
-    if r_games != 0:
-        for i in range(r_games):
-            n_games[i] += 1
+    n_games = get_games_per_worker(self_play_times, max_workers)
 
     while not is_done():
         weights = actor.get_weights()
@@ -576,29 +572,18 @@ def create_alphazero(game, adapter, max_workers=None,
 
 def parallel_play(game, adapter, rival, weights_file, color, games=100,
                   max_workers=4, *args, **kwargs):
-    import ray
+    def play_(n):
+        az = AlphaZero(game, adapter, *args, gpu=False, **kwargs)
+        az.load(weights_file)
+        if color in (WHITE, 'white'):
+            return play(game, az, rival, games=n)
+        elif color in (BLACK, 'black'):
+            return play(game, rival, az, games=n)
+        else:
+            raise ValueError(f"invalid color: {color} "
+                             f"(expected 'white' (1) or 'black' (-1))")
 
-    if not ray.is_initialized():
-        ray.init(log_to_driver=False)
+    n_games = get_games_per_worker(games, max_workers)
 
-    AZ = ray.remote(AlphaZero)
-    if color in (WHITE, 'white'):
-        AZ.play = ray.remote(lambda self, n: play(game, self, rival, games=n))
-    elif color in (BLACK, 'black'):
-        AZ.play = ray.remote(lambda self, n: play(game, rival, self, games=n))
-    else:
-        raise ValueError(f"invalid color: {color} "
-                         f"(expected 'white' (1) or 'black' (-1))")
-    azs = [AZ.remote(game, adapter, *args, gpu=False, **kwargs)
-           for _ in range(max_workers)]
-    ray.get([az.load(weights_file) for az in azs])
-
-    d_games = games // max_workers
-    r_games = games % max_workers
-    n_games = [d_games] * max_workers
-    if r_games != 0:
-        for i in range(r_games):
-            n_games[i] += 1
-
-    results = ray.get([az.play(n) for az, n in zip(azs, n_games)])
-    return reduce(lambda acc, x: map(sum, zip(acc, x)), results)
+    results = Parallel(max_workers)(delayed(play_)(g) for g in n_games)
+    return tuple(reduce(lambda acc, x: map(sum, zip(acc, x)), results))

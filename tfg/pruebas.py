@@ -5,7 +5,7 @@ import numpy as np
 
 from tfg.strategies import Minimax, HumanStrategy
 from tfg.util import enable_gpu, play
-from tfg.alphaZero import AlphaZero, create_alphazero
+from tfg.alphaZero import AlphaZero, create_alphazero, parallel_play
 from game.tictactoe import TicTacToe, encode, decode
 from tfg.debugger import Debugger
 from tfg.alphaZeroAdapters import TicTacToeAdapter
@@ -14,6 +14,9 @@ if __name__ == '__main__':
     enable_gpu()
 
     game = TicTacToe()
+    print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
+                        '../experiments/models/experiment_tictactoe.h5',
+                        'black', max_workers=10, mcts_iter=400))
 
     #alphaZero = create_alphazero(game, TicTacToeAdapter(),
     #                             self_play_times=1, max_games_counter=20,
