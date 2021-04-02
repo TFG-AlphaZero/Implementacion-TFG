@@ -558,8 +558,7 @@ class MonteCarloTree(Strategy):
                     reward = self._simulate(env)
                 else:
                     # Estimate via value_function
-                    to_play = self._env.to_play
-                    reward = self._value_function(current_node) * to_play
+                    reward = self._value_function(current_node) * env.to_play
 
             # Backpropagation phase
             # Who played the move that lead to that node

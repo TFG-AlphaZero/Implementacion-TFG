@@ -256,9 +256,9 @@ class AlphaZero(Strategy):
                 if done:
                     # Nothing to do
                     # TODO not sure if this state should be appended or not
-                    # n = self._env.action_space.n
-                    # pi = np.full(n, 1 / n)
-                    # game_data.append((observation, self._env.to_play, pi))
+                    n = self._adapter.output_features
+                    pi = np.full(n, 1 / n)
+                    game_data.append((observation, self._env.to_play, pi))
                     # If game is over: exit loop
                     print(f"game finished in {time.time() - s}")
                     break
@@ -520,6 +520,9 @@ def create_alphazero(game, adapter, max_workers=None,
             n_games[i] += 1
 
     while not is_done():
+        weights = actor.get_weights()
+        ray.get([az.set_weights.remote(weights) for az in azs])
+
         futures = [az._self_play.remote(g, temperature, callbacks)
                    for az, g in zip(azs, n_games)]
         moves, callback_results = zip(*ray.get(futures))
@@ -551,8 +554,6 @@ def create_alphazero(game, adapter, max_workers=None,
                                            verbose=2,
                                            validation_split=0)
 
-        weights = actor.get_weights()
-
         current_error = history.history['loss'][-1]
         current_time = time.time()
         games_counter += self_play_times
@@ -569,8 +570,6 @@ def create_alphazero(game, adapter, max_workers=None,
         if callbacks is not None:
             for callback in callbacks:
                 callback.on_update_end(actor, info)
-        futures = [az.set_weights.remote(weights) for az in azs]
-        ray.get(futures)
 
     return actor
 
