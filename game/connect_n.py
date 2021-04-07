@@ -63,7 +63,7 @@ class ConnectN(GameEnv):
         return self.board.copy()
 
     def render(self, mode='human'):
-        mapping = {-1: '\033[96mO\033[0m', 0: ' ', 1: '\033[92mO\033[0m'}
+        mapping = {-1: '○', 0: ' ', 1: '●'}
         tokens = [[mapping[cell] for cell in row] for row in self.board]
         print(f"Connect {self._n}")
         print("\n".join(

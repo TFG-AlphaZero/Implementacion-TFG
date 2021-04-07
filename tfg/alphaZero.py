@@ -256,7 +256,6 @@ class AlphaZero(Strategy):
 
                 if done:
                     # Nothing to do
-                    # TODO not sure if this state should be appended or not
                     n = self._adapter.output_features
                     pi = np.full(n, 1 / n)
                     game_data.append((observation, self._env.to_play, pi))
@@ -435,7 +434,9 @@ class AlphaZero(Strategy):
         return np.argmax(res)
 
 
-def create_alphazero(game, adapter, max_workers=None,
+def create_alphazero(game, adapter,
+                     initial_weights=None,
+                     max_workers=None,
                      buffer_size=config.BUFFER_SIZE,
                      self_play_times=config.SELF_PLAY_TIMES,
                      max_train_time=config.MAX_TRAIN_TIME,
@@ -452,7 +453,9 @@ def create_alphazero(game, adapter, max_workers=None,
 
     Args:
         game (tfg.games.GameEnv): Game AlphaZero is for.
-        adapter (NeuralNetworkAdapter): Adapter for the game given as env.
+        adapter (tfg.alphaZeroAdapters.NeuralNetworkAdapter): Adapter for the
+            game given as env.
+        initial_weights (str): File to load initial weights from.
         max_workers(int): Number of processes that will be used.
         buffer_size (int): Max number of states that can be stored before
             training. If this maximum is reached, oldest states will be
@@ -505,6 +508,9 @@ def create_alphazero(game, adapter, max_workers=None,
     azs = [AZ.remote(game, adapter, *args, gpu=False, **kwargs)
            for _ in range(max_workers)]
     actor = AlphaZero(game, adapter, *args, **kwargs)
+
+    if initial_weights is not None:
+        actor.load(initial_weights)
 
     start_time = time.time()
     current_time = start_time
@@ -572,6 +578,27 @@ def create_alphazero(game, adapter, max_workers=None,
 
 def parallel_play(game, adapter, rival, weights_file=None, color=WHITE,
                   games=100, max_workers=4, *args, **kwargs):
+    """Utility function that allows to play games with AlphaZero using multiple
+    processors.
+
+    Args:
+        game (tfg.games.GameEnv): Game to be played.
+        adapter (tfg.alphaZeroAdapters.NeuralNetworkAdapter): Adapter for the
+            game given as env.
+        rival (tfg.strategies.Strategy): AlphaZero's opponent.
+        weights_file (str): File to load weights from.
+        color (int or str): AlphaZero's color. Either BLACK (-1) or WHITE (1),
+            or 'black' or 'white'. Defaults to WHITE.
+        games (int): Number of games to be played. Defaults to 100.
+        max_workers (int): Number of processes that will be used.
+        *args: Other arguments passed to AlphaZero's constructor starting
+            after adapter.
+        **kwargs: Other keyword arguments passed to AlphaZero's constructor.
+
+    Returns:
+        ((int, int, int)): Games won by white, drawn and won by black.
+
+    """
     def play_(n):
         az = AlphaZero(game, adapter, *args, gpu=False, **kwargs)
         if weights_file is not None:
