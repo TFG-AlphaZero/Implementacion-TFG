@@ -570,11 +570,12 @@ def create_alphazero(game, adapter, max_workers=None,
     return actor
 
 
-def parallel_play(game, adapter, rival, weights_file, color, games=100,
-                  max_workers=4, *args, **kwargs):
+def parallel_play(game, adapter, rival, weights_file=None, color=WHITE,
+                  games=100, max_workers=4, *args, **kwargs):
     def play_(n):
         az = AlphaZero(game, adapter, *args, gpu=False, **kwargs)
-        az.load(weights_file)
+        if weights_file is not None:
+            az.load(weights_file)
         if color in (WHITE, 'white'):
             return play(game, az, rival, games=n)
         elif color in (BLACK, 'black'):
