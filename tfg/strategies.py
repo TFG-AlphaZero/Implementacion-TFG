@@ -124,21 +124,20 @@ class Minimax(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            max_depth (int, optional): Maximum depth the tree is allowed to
-            grow. If None it will grow until a
-                leaf node is reached. If set, heuristic must be given. Defaults
-                to None.
-            heuristic (function, optional): If max_depth is not None, heuristic
-                function (observation: object, to_play: int) -> int that will be
-                called to estimate the value of a leaf node. This value will
-                be positive if WHITE is more likely to win, negative if BLACK is
-                the one who is winning and 0 if the game is estimated to end
-                in a draw. It is recommended that the return value of this
-                function is between -1 and 1.
-            alpha_beta (bool, optional): Determines whether or not to use
-                AlphaBeta prune. Defaults to True.
-            ordering (function, optional): Function (action: object) -> number
-                that will be used as key function to sort actions before
+            max_depth (int): Maximum depth the tree is allowed to grow. If
+                None it will grow until a leaf node is reached. If set,
+                heuristic must be given. Defaults to None.
+            heuristic (function): If max_depth is not None, heuristic
+                function (observation: object, to_play: int) -> number that
+                will be called to estimate the value of a leaf node. This
+                value will be positive if WHITE is more likely to win,
+                negative if BLACK is the one who is winning and 0 if the game
+                is estimated to end in a draw. It is recommended that the
+                return value of this function is between -1 and 1.
+            alpha_beta (bool): Determines whether or not to use AlphaBeta
+                prune. Defaults to True.
+            ordering (function): Function (action: object) -> number that
+                will be used as key function to sort actions before
                 traversing them. Lower numbers go first. If set to None,
                 actions will be traversed with the same order as they were
                 returned by env.legal_actions() function. Defaults to

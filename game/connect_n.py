@@ -124,6 +124,58 @@ class ConnectN(GameEnv):
         return 0, False
 
 
+def n_connected_heuristic(n):
+    def analyze_line(line):
+        s = 0
+        t = 0
+        prev = None
+        count = 0
+        zeros = 0
+        # Check if aligned tokens are surrounded by opponents tokens
+        surrounded = True
+        for x in line:
+            if x == 0:
+                zeros += 1
+                # Add remaining
+                s += t
+                t = 0
+                surrounded = False
+                if zeros == 2:
+                    # Reset if we find two zeros
+                    count = 0
+                    zeros = 0
+            else:
+                zeros = 0
+                if x == prev:
+                    count += 1
+                    if count == n:
+                        t += x
+                    count -= 1
+                else:
+                    if not surrounded:
+                        s += t
+                    t = 0
+                    surrounded = prev != 0
+                    count = 1
+
+            prev = x
+        return s
+
+    def heuristic(observation, to_play=None):
+        rows, cols = observation.shape
+        s = 0
+        for i in range(rows):
+            s += analyze_line(observation[i])
+        for j in range(cols):
+            s += analyze_line(observation[:, j])
+        for k in range(-rows, cols + 1):
+            s += analyze_line(np.diag(observation, k=k))
+            s += analyze_line(np.diag(np.fliplr(observation), k=k))
+        return s
+
+    return heuristic
+
+
 if __name__ == '__main__':
     game = ConnectN()
     s1 = MonteCarloTree(game, max_iter=800, reset_tree=False)
