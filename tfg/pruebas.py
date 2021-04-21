@@ -2,29 +2,32 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import time
 
 from tfg.strategies import Minimax, HumanStrategy
 from tfg.util import enable_gpu, play
 from tfg.alphaZero import AlphaZero, create_alphazero, parallel_play
-from game.tictactoe import TicTacToe, encode, decode
+from game.connect_n import ConnectN
 from tfg.debugger import Debugger
-from tfg.alphaZeroAdapters import TicTacToeAdapter
+from tfg.alphaZeroAdapters import ConnectNAdapter
 
 if __name__ == '__main__':
     enable_gpu()
 
-    game = TicTacToe()
-    print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
-                        '../experiments/models/experiment_tictactoe.h5',
-                        'black', max_workers=10, mcts_iter=400))
+    game = ConnectN()
+    # print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
+    #                     '../experiments/models/experiment_tictactoe.h5',
+    #                     'black', max_workers=10, mcts_iter=400))
 
     #alphaZero = create_alphazero(game, TicTacToeAdapter(),
     #                             self_play_times=1, max_games_counter=20,
     #                             buffer_size=32, batch_size=16, mcts_iter=100)
     
-    #alphaZero = AlphaZero(game, adapter=TicTacToeAdapter())
+    alphaZero = AlphaZero(game, adapter=ConnectNAdapter(game), mcts_iter=600)
     #alphaZero.load('models/TicTacToe400Iteraciones.h5')
-    #alphaZero.train(callbacks=[callback])
+    start = time.time()
+    alphaZero._self_play(32, 10, [])
+    print("FINISHED IN", time.time() - start, "SECONDS")
     #alphaZero.save('models/TicTacToeParallel.h5')
 
     #debugger = Debugger(game, adapter=TicTacToeAdapter())
