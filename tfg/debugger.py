@@ -5,21 +5,25 @@ from tfg.strategies import Strategy, Minimax
 from tfg.alphaZero import AlphaZero
 from tfg.alphaZeroNN import NeuralNetworkAZ
 from matplotlib import pyplot as plt
+from tfg.util import enable_gpu, play
+import time
 
 class Debugger(Strategy):
 
-    def __init__(self, env, adapter):
+    def __init__(self, env, adapter, nn = None):
         self._env = env
         self.solver = Minimax(env)
         self.adapter = adapter
 
-        #Initialize neural network
-        nn_config = config.AlphaZeroConfig()
-        self.neural_network = NeuralNetworkAZ(
-            input_dim=adapter.input_shape,
-            output_dim=adapter.output_features,
-            **nn_config.__dict__
-        )
+        if nn is None :
+            #Initialize neural network
+            nn_config = config.AlphaZeroConfig()
+            nn = NeuralNetworkAZ(
+                input_dim=adapter.input_shape,
+                output_dim=adapter.output_features,
+                **nn_config.__dict__
+            )
+        self.neural_network = nn
 
         #Format pi vector properly
         np.set_printoptions(suppress=True)
@@ -35,6 +39,7 @@ class Debugger(Strategy):
         reward = predictions[0][0][0]
         probabilities = predictions[1][0]
         
+        #print(observation)
         #print(reward, probabilities)
         
         probabilities[legal_actions != 0] = 0
@@ -117,7 +122,12 @@ class Debugger(Strategy):
     def test_nn(self, moves = None):
         if moves is None :
             #Play a game against solver
-            moves = self._self_play(1)
+            while True :
+                moves = self._self_play(1)
+                if moves[-1][-1] != 0 :
+                    break
+                else :
+                    moves = []
 
         train_board, train_pi, train_reward = self.get_train_data(moves)
 
@@ -176,3 +186,14 @@ class Debugger(Strategy):
             print("Turno: ", turn, aux)
             print("Vector Pi: ", pi)
             print("Winner: ", winner)
+
+    def test_predict(self, board, turn):
+        x = [self.adapter.to_input(board, turn) for i in range(128)]
+
+        start = time()
+        
+        print(start - time())
+
+        start = time()
+
+        print(start - time())

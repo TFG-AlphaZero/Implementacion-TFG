@@ -3,31 +3,35 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 
 import numpy as np
 
-from tfg.strategies import Minimax, HumanStrategy
+from tfg.strategies import Minimax, HumanStrategy, MonteCarloTree
 from tfg.util import enable_gpu, play
 from tfg.alphaZero import AlphaZero, create_alphazero, parallel_play
 from game.tictactoe import TicTacToe, encode, decode
+from game.connect_n import ConnectN
 from tfg.debugger import Debugger
-from tfg.alphaZeroAdapters import TicTacToeAdapter
+from tfg.alphaZeroAdapters import TicTacToeAdapter, ConnectNAdapter
 
 if __name__ == '__main__':
     enable_gpu()
 
-    game = TicTacToe()
-    print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
-                        '../experiments/models/experiment_tictactoe.h5',
-                        'black', max_workers=10, mcts_iter=400))
+    game = ConnectN(n=3, rows=3, cols=3)
+    #print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
+    #                    'experiments/models/experiment_tictactoe.h5',
+    #                    'black', max_workers=10, mcts_iter=10), games=10)
 
-    #alphaZero = create_alphazero(game, TicTacToeAdapter(),
-    #                             self_play_times=1, max_games_counter=20,
-    #                             buffer_size=32, batch_size=16, mcts_iter=100)
+    #alphaZero = create_alphazero(game, ConnectNAdapter(game),
+    #                             self_play_times=10, max_games_counter=200,
+    #                             buffer_size=1500, batch_size=512, 
+    #                             mcts_iter=100, epochs=20,
+    #                             exploration_noise=(.25, .045), c_puct=1,
+    #                             max_workers=5)
     
-    #alphaZero = AlphaZero(game, adapter=TicTacToeAdapter())
-    #alphaZero.load('models/TicTacToe400Iteraciones.h5')
-    #alphaZero.train(callbacks=[callback])
-    #alphaZero.save('models/TicTacToeParallel.h5')
+    alphaZero = AlphaZero(game, adapter=ConnectNAdapter(game), mcts_iter=100)
+    #alphaZero.load('models/ConnectN_v1.h5')
+    alphaZero.train(self_play_times=10, max_games_counter=100)
+    #alphaZero.save('models/ConnectN_v1.h5')
 
-    #debugger = Debugger(game, adapter=TicTacToeAdapter())
+    #debugger = Debugger(game, adapter=TicTacToeAdapter(), nn=alphaZero.neural_network)
     #debugger.load("models/Debugger2.h5")
     #history = debugger.train_supervised_nn(max_games_counter=100, epochs=250)
     #debugger.plot_history(history, "models/Debugger2Loss")
@@ -35,7 +39,7 @@ if __name__ == '__main__':
     #debugger.test_nn()
 
     #Play as black against Minimax
-    #results = play(game, Minimax(game), debugger, games=10)
+    #results = play(game, alphaZero, MonteCarloTree(game, max_iter=400), games=5)
     #print(results)
     
     #Play as white against Minimax
@@ -43,6 +47,6 @@ if __name__ == '__main__':
     #print(results)
     
     #Play against human
-    #results = play(game, HumanStrategy(game), debugger, render=True,
+    #results = play(game, HumanStrategy(game), alphaZero, render=True,
     #               print_results=True)
     #print(results)
