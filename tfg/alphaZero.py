@@ -5,6 +5,7 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 import numpy as np
 import os
 import collections
+import itertools
 import time
 import random
 import tfg.alphaZeroConfig as config
@@ -69,7 +70,9 @@ class AlphaZero(Strategy):
         self._nn_input = None
         self._nn_barrier = None
         self._nn_predictions = None
+        self._nn_predict = None
 
+        self._thr_num_active = None
         self._thr_actions = None
         self._thr_sync = None
 
@@ -242,23 +245,27 @@ class AlphaZero(Strategy):
                     action = mcts.move(obs)
                     self._thr_actions[index] = action
 
-                self._thr_sync[index] = True
-                self._nn_barrier.wait()
-                while not all(self._thr_sync):
+                while not self._thr_sync:
                     self._nn_barrier.wait()
 
             return f
 
         def multi_predict():
-            self._nn_predictions = self.neural_network.predict(
-                self._nn_input
-            )
+            if self._nn_predict:
+                self._nn_predictions = self.neural_network.predict(
+                    self._nn_input
+                )
+                self._nn_predict = False
+            else:
+                self._thr_sync = True
 
         callback_results = ([list() for _ in callbacks]
                             if callbacks is not None else [])
 
         self._nn_input = np.zeros((num, *self._adapter.input_shape))
         self._thr_actions = [None] * num
+        self._thr_num_active = num
+        self._nn_barrier = Barrier(num, action=multi_predict)
 
         envs = [copy.deepcopy(self._env) for _ in range(num)]
 
@@ -280,12 +287,11 @@ class AlphaZero(Strategy):
         s = time.time()
 
         # Loop until all games end
-        while not all(dones):
-            print([i for i, d in enumerate(dones) if not d])
-            self._nn_barrier = Barrier(num, action=multi_predict)
+        while self._thr_num_active > 0:
+            self._nn_predict = False
+            self._thr_sync = False
 
             # Launch threads to choose moves from MCTS
-            self._thr_sync = [False] * num
             threads = [Thread(target=thread_run(i, mcts, o, d))
                        for i, (mcts, o, d)
                        in enumerate(zip(mctss, observations, dones))]
@@ -318,6 +324,7 @@ class AlphaZero(Strategy):
                 mctss[i].update(actions[i])
 
                 if done:
+                    self._thr_num_active -= 1
                     n = self._adapter.output_features
                     pi = np.full(n, 1 / n)
                     game_data[i].append((observation, envs[i].to_play, pi))
@@ -413,6 +420,7 @@ class AlphaZero(Strategy):
         if index is not None:
             # Synchronize
             self._nn_input[index] = nn_input
+            self._nn_predict = True
             # Wait until all threads are ready
             self._nn_barrier.wait()
             # Barrier predicts before exiting

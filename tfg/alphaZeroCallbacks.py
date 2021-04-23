@@ -78,7 +78,7 @@ class PositionCheckerCallback(Callback):
 
 class Checkpoint(Callback):
 
-    def __init__(self, prefix="checkpoint", directory='checkpoints', delay=1,
+    def __init__(self, prefix='checkpoint', directory='checkpoints', delay=1,
                  verbose=True):
         self.prefix = prefix
         self.directory = directory
