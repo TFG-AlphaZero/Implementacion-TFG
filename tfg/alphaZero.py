@@ -1,9 +1,11 @@
+import copy
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
 import os
 import collections
+import itertools
 import time
 import random
 import tfg.alphaZeroConfig as config
@@ -14,6 +16,7 @@ from tfg.util import play, get_games_per_worker
 from tfg.games import BLACK, WHITE
 from functools import reduce
 from joblib import delayed, Parallel
+from threading import Barrier, Thread
 
 
 class AlphaZero(Strategy):
@@ -63,6 +66,15 @@ class AlphaZero(Strategy):
         self.noise_alpha = exploration_noise[1]
         self.temperature = 0
         self._buffer = None
+
+        self._nn_input = None
+        self._nn_barrier = None
+        self._nn_predictions = None
+        self._nn_predict = None
+
+        self._thr_num_active = None
+        self._thr_actions = None
+        self._thr_sync = None
 
         self._mcts = MonteCarloTree(
             self._env,
@@ -224,60 +236,117 @@ class AlphaZero(Strategy):
                 pi[index] = 1
                 return pi
 
-        game_buffer = []
+        def vale_function(i):
+            return lambda node: self._value_function(node, i)
+
+        def thread_run(index, mcts, obs, done):
+            def f():
+                if not done:
+                    action = mcts.move(obs)
+                    self._thr_actions[index] = action
+
+                while not self._thr_sync:
+                    self._nn_barrier.wait()
+
+            return f
+
+        def multi_predict():
+            if self._nn_predict:
+                self._nn_predictions = self.neural_network.predict(
+                    self._nn_input
+                )
+                self._nn_predict = False
+            else:
+                self._thr_sync = True
+
         callback_results = ([list() for _ in callbacks]
                             if callbacks is not None else [])
 
-        # Play num games
-        for _ in range(num):
-            # Initialize game
-            observation = self._env.reset()
-            self._mcts.update(None)
-            game_data = []
-            self.temperature = temperature
-            s = time.time()
+        self._nn_input = np.zeros((num, *self._adapter.input_shape))
+        self._thr_actions = [None] * num
+        self._thr_num_active = num
+        self._nn_barrier = Barrier(num, action=multi_predict)
 
-            # Loop until game ends
-            while True:
-                # Choose move from MCTS
-                action = self._mcts.move(observation)
+        envs = [copy.deepcopy(self._env) for _ in range(num)]
 
+        mctss = [MonteCarloTree(
+            env,
+            max_iter=self._mcts.max_iter,
+            max_time=self._mcts.max_time,
+            selection_policy=self._selection_policy,
+            value_function=vale_function(i),
+            best_node_policy=self._best_node_policy,
+            reset_tree=False
+        ) for i, env in enumerate(envs)]
+
+        # Initialize game
+        observations = [env.reset() for env in envs]
+        dones = [False] * num
+        game_data = [list() for _ in range(num)]
+        self.temperature = temperature
+        s = time.time()
+
+        # Loop until all games end
+        while self._thr_num_active > 0:
+            self._nn_predict = False
+            self._thr_sync = False
+
+            # Launch threads to choose moves from MCTS
+            threads = [Thread(target=thread_run(i, mcts, o, d))
+                       for i, (mcts, o, d)
+                       in enumerate(zip(mctss, observations, dones))]
+
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            # Threads have been synchronized
+            actions = self._thr_actions
+
+            # Update temperature parameter
+            self.temperature = max(0, self.temperature - 1)
+
+            # Make all moves
+            for i in range(num):
+                if dones[i]:
+                    continue
                 # Calculate Pi vector
-                pi = make_policy(self._mcts.stats['actions'])
-                # Update temperature parameter
-                self.temperature = max(0, self.temperature - 1)
+                pi = make_policy(mctss[i].stats['actions'])
                 # Store move data: (board, turn, pi)
-                game_data.append((observation, self._env.to_play, pi))
+                game_data[i].append((observations[i], envs[i].to_play, pi))
 
                 # Perform move
-                observation, _, done, _ = self._env.step(action)
+                observation, _, done, _ = envs[i].step(actions[i])
+                observations[i] = observation
+                dones[i] = done
                 # Update MCTS (used to recycle tree for next move)
-                self._mcts.update(action)
+                mctss[i].update(actions[i])
 
                 if done:
-                    # Nothing to do
+                    self._thr_num_active -= 1
                     n = self._adapter.output_features
                     pi = np.full(n, 1 / n)
-                    game_data.append((observation, self._env.to_play, pi))
+                    game_data[i].append((observation, envs[i].to_play, pi))
                     # If game is over: exit loop
                     print(f"game finished in {time.time() - s}")
-                    break
 
-            # Store winner in all states gathered
-            winner = self._env.winner()
-            for i in range(len(game_data)):
-                to_play = game_data[i][1]
-                game_data[i] += (winner * to_play,)
+        # Store winner in all states gathered
+        for i, (data, env) in enumerate(zip(game_data, envs)):
+            winner = env.winner()
+            for j in range(len(data)):
+                to_play = data[j][1]
+                data[j] += (winner * to_play,)
 
-            # Add game states to buffer: (board, turn, pi, winner)
-            game_buffer.extend(game_data)
+        # Flatten all results
+        game_data = [d for data in game_data for d in data]
 
-            # Add callback results
-            if callbacks is not None:
-                for callback, result in zip(callbacks, callback_results):
-                    result.append(callback.on_game_end(game_data))
+        # Add callback results
+        if callbacks is not None:
+            for callback, result in zip(callbacks, callback_results):
+                result.append(callback.on_game_end(game_data))
 
-        return game_buffer, callback_results
+        return game_data, callback_results
 
     def move(self, observation):
         self.temperature = 0
@@ -342,18 +411,27 @@ class AlphaZero(Strategy):
         """
         self.neural_network.model.set_weights(weights)
 
-    def _value_function(self, node):
+    def _value_function(self, node, index=None):
         # Convert node to network input format
         nn_input = np.array([
             self._adapter.to_input(node.observation, node.to_play)
         ])
-        
-        # Predict Node with Neural Network
-        predictions = self.neural_network.predict(nn_input)
-        
-        # Extract output data
-        reward = predictions[0][0][0]
-        probabilities = predictions[1][0]
+
+        if index is not None:
+            # Synchronize
+            self._nn_input[index] = nn_input
+            self._nn_predict = True
+            # Wait until all threads are ready
+            self._nn_barrier.wait()
+            # Barrier predicts before exiting
+            reward = self._nn_predictions[0][index, 0]
+            probabilities = self._nn_predictions[1][index]
+        else:
+            # Predict Node with Neural Network
+            predictions = self.neural_network.predict(nn_input)
+            # Extract output data
+            reward = predictions[0][0, 0]
+            probabilities = predictions[1][0]
 
         # Obtain legal actions
         legal_actions = list(node.children.keys())
@@ -366,7 +444,11 @@ class AlphaZero(Strategy):
         # Obtain only legal probabilities and interpolate them
         mask = np.zeros_like(probabilities, dtype=bool)
         mask[mask_indices] = True
-        probabilities[mask] /= probabilities[mask].sum()
+        if (probabilities[mask] == 0).all():
+            # All probabilities may be zero
+            probabilities[mask] = 1 / mask.sum()
+        else:
+            probabilities[mask] /= probabilities[mask].sum()
         probabilities[~mask] = 0
 
         # Add exploration noise if node is root

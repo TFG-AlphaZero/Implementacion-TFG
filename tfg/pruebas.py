@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import time
 
 from tfg.strategies import Minimax, HumanStrategy, MonteCarloTree
 from tfg.util import enable_gpu, play
@@ -14,10 +15,10 @@ from tfg.alphaZeroAdapters import TicTacToeAdapter, ConnectNAdapter
 if __name__ == '__main__':
     enable_gpu()
 
-    game = ConnectN(n=3, rows=3, cols=3)
-    #print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
-    #                    'experiments/models/experiment_tictactoe.h5',
-    #                    'black', max_workers=10, mcts_iter=10), games=10)
+    game = ConnectN()
+    # print(parallel_play(game, TicTacToeAdapter(), Minimax(game),
+    #                     '../experiments/models/experiment_tictactoe.h5',
+    #                     'black', max_workers=10, mcts_iter=400))
 
     #alphaZero = create_alphazero(game, ConnectNAdapter(game),
     #                             self_play_times=10, max_games_counter=200,
