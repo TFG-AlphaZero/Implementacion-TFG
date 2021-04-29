@@ -1,13 +1,11 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import numpy as np
-import time
 
 from tfg.strategies import Minimax, HumanStrategy, MonteCarloTree
 from tfg.util import enable_gpu, play
 from tfg.alphaZero import AlphaZero, create_alphazero, parallel_play
-from game.tictactoe import TicTacToe, encode, decode
+from game.tictactoe import TicTacToe
 from game.connect_n import ConnectN
 from tfg.debugger import Debugger
 from tfg.alphaZeroAdapters import TicTacToeAdapter, ConnectNAdapter

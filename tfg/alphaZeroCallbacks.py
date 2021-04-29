@@ -46,40 +46,32 @@ class Callback:
         Args:
             actor (tfg.alphaZero.AlphaZero): Actor being trained.
             info (dict): Dict containing some relevant info about the training.
-                TODO what
+                This dict contains 'error', the current error; 'time',
+                elapsed training time; 'games', number of games played;
+                'remote_actors' (optional), a list of pointers to the remote
+                ray actors if training in parallel.
 
         """
         pass
 
 
-class PositionCheckerCallback(Callback):
-
-    def __init__(self, encoder=None):
-        self._encoder = encoder
-        self.states = dict()
-
-    def on_game_end(self, game):
-        states = list()
-        for state in game:
-            board, to_play, _, _ = state
-            if self._encoder is not None:
-                board = self._encoder(board)
-            states.append((board, to_play))
-        return states
-
-    def join(self, games):
-        for states in games:
-            for state in states:
-                if state not in self.states:
-                    self.states[state] = 1
-                else:
-                    self.states[state] += 1
-
-
 class Checkpoint(Callback):
+    """Callback that saves a checkpoint of the model after updating weights."""
 
     def __init__(self, prefix='checkpoint', directory='checkpoints', delay=1,
                  verbose=True):
+        """
+
+        Args:
+            prefix (str): Filename prefix. Defaults to 'checkpoint'.
+            directory (str): Where to save the models. Defaults to
+                'checkpoints'.
+            delay (int): Number of weight updates between one checkpoint and
+                the next. Defaults to 1.
+            verbose (bool): Whether to print the filename after saving or
+                not. Defaults to True.
+
+        """
         self.prefix = prefix
         self.directory = directory
         self.delay = delay
@@ -97,11 +89,23 @@ class Checkpoint(Callback):
 
 
 class ParamScheduler(Callback):
+    """Callback that allows the modification of some hyperparameters."""
 
     def __init__(self,
                  mtcs_iter_schedule=None,
                  lr_schedule=None,
                  verbose=True):
+        """
+
+        Args:
+            mtcs_iter_schedule (dict[int, int]): Mapping from number of
+                games played to number of MCTS iterations. Optional.
+            lr_schedule (dict[int, float]): Mapping from number of
+                games played to neural network's learning rate. Optional.
+            verbose (bool): Whether to print the value set after setting it.
+                Defaults to True.
+
+        """
 
         self.mcts_iter_schedule = self._convert_schedule(mtcs_iter_schedule)
         self.lr_schedule = self._convert_schedule(lr_schedule)
@@ -155,6 +159,11 @@ class ParamScheduler(Callback):
 
 
 class GameStore(Callback):
+    """Callback that stores all games played during training.
+
+    Now it might be broken as several games are played at the same time
+    during self-play and they won't get appended properly.
+    """
 
     def __init__(self):
         self.games = []

@@ -94,28 +94,6 @@ class TicTacToe(GameEnv):
         return 0, False
 
 
-def encode(board):
-    encoded = 0x0
-    shift = 0
-    bits = {0: 0b00, WHITE: 0b01, BLACK: 0b10}
-    for row in board:
-        for x in row:
-            encoded |= bits[x] << shift
-            shift += 2
-    return encoded
-
-
-def decode(board):
-    decoded = np.zeros(shape=(3, 3))
-    bits = [0, WHITE, BLACK]
-    shift = 0
-    for i in range(3):
-        for j in range(3):
-            decoded[i, j] = bits[((0b11 << shift) & board) >> shift]
-            shift += 2
-    return decoded
-
-
 if __name__ == '__main__':
     game = TicTacToe()
     s1 = MonteCarloTree(game, max_iter=10_000, max_time=5.)

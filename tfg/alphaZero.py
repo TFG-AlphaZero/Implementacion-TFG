@@ -454,7 +454,6 @@ class AlphaZero(Strategy):
         # Add exploration noise if node is root
         if self.training and node.root:
             alpha = np.full(len(legal_actions), self.noise_alpha)
-            # TODO according to Numpy we should use a newer Dirichlet function
             noise, = np.random.dirichlet(alpha, size=1)
             probabilities[mask] = (
                     (1 - self.noise_fraction) * probabilities[mask]

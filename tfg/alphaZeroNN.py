@@ -3,6 +3,7 @@ sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG 
 
 
 class NeuralNetworkAZ:
+    """Class implementing AlphaZero's neural network."""
 
     def __init__(self,
                  learning_rate,
@@ -13,6 +14,19 @@ class NeuralNetworkAZ:
                  residual_layers,
                  filters,
                  kernel_size):
+        """
+
+        Args:
+            learning_rate (float): Network's learning rate.
+            regularizer_constant (float): Constant used in regularization.
+            momentum (float): Unused at the moment.
+            input_dim ((int, int, int)): Expected input tensors' shape.
+            output_dim (int): Number of outputs.
+            residual_layers (int): Number of residual layers.
+            filters (int): Number of filters per convolution.
+            kernel_size ((int, int) or int): Kernel size of every convolution.
+
+        """
         self.learning_rate = learning_rate
         self.regularizer_constant = regularizer_constant
         self.momentum = momentum
@@ -23,7 +37,9 @@ class NeuralNetworkAZ:
         self.model = self._create_model(filters, kernel_size)
 
     def _create_model(self, filters, kernel_size):
-        import tensorflow as tf
+        from tensorflow.keras.losses import (
+            MeanSquaredError, CategoricalCrossentropy
+        )
         from tensorflow.keras.models import Model
         from tensorflow.keras.layers import Input
         from tensorflow.keras.optimizers import Adam
@@ -39,12 +55,10 @@ class NeuralNetworkAZ:
         policy_head = self._create_policy_head(nn)
 
         model = Model(inputs=[input], outputs=[value_head, policy_head])
-        model.compile(#optimizer=SGD(learning_rate=self.learning_rate,
-                      #              momentum=self.momentum),
-                      optimizer=Adam(learning_rate=self.learning_rate),
+        model.compile(optimizer=Adam(learning_rate=self.learning_rate),
                       loss={
-                          'value_head': tf.keras.losses.MeanSquaredError(),
-                          'policy_head': tf.keras.losses.CategoricalCrossentropy()
+                          'value_head': MeanSquaredError(),
+                          'policy_head': CategoricalCrossentropy()
                       },
                       loss_weights={'value_head': 0.5, 'policy_head': 0.5}
                       )
@@ -52,8 +66,6 @@ class NeuralNetworkAZ:
         return model
 
     def _create_convolutional_layer(self, input, filters, kernel_size):
-        # TODO podemos ponerles nombres a los layers para que se visualicen
-        #  mejor
         from tensorflow.keras.layers import (
             Conv2D, BatchNormalization, LeakyReLU
         )
@@ -165,36 +177,11 @@ class NeuralNetworkAZ:
             kernel_regularizer=regularizers.l2(self.regularizer_constant)
         )(layer)
         
-        layer = Activation('softmax', name = 'policy_head')(layer)
-        
-        #layer = tf.keras.backend.print_tensor(layer, message="PH Output: ")
-        #layer = Lambda(lambda x : x, name = 'policy_head')(layer)
+        layer = Activation('softmax', name='policy_head')(layer)
         
         return layer
 
-    def _softmax_cross_entropy(self, y_true, y_predicted):
-        import tensorflow as tf
-
-        pi = y_true
-        p = y_predicted
-      
-        #zero = tf.zeros(shape = tf.shape(pi), dtype=tf.float32)
-        #where = tf.equal(pi, zero)
-        #negatives = tf.fill(tf.shape(pi), -100.0) 
-        
-        #p = tf.where(where, negatives, p) #We are basically masking out illegal moves
-        #tf.keras.backend.print_tensor(p, message="P: ")
-        #tf.keras.backend.print_tensor(pi, message="Pi: ")
-        
-        loss = tf.keras.losses.CategoricalCrossentropy()(pi, p)
-
-        return loss
-    
-    # def fit(self, x, y, batch_size, epochs, verbose, validation_split):
     def fit(self, *args, **kwargs):
-        # return self.model.fit(x=x, y=y, batch_size=batch_size, epochs=epochs,
-        #                       verbose=verbose,
-        #                       validation_split=validation_split)
         return self.model.fit(*args, **kwargs)
 
     def predict(self, x):
@@ -214,7 +201,7 @@ class NeuralNetworkAZ:
 
     def plot_model(self, path):
         from tensorflow.keras.utils import plot_model
-        plot_model(self.model, to_file=path, show_shapes = True)
+        plot_model(self.model, to_file=path, show_shapes=True)
 
     def summary_model(self):
         self.model.summary()
