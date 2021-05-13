@@ -171,7 +171,7 @@ def n_connected_heuristic(n):
         for k in range(-rows, cols + 1):
             s += analyze_line(np.diag(observation, k=k))
             s += analyze_line(np.diag(np.fliplr(observation), k=k))
-        return s
+        return s / np.multiply(*observation.shape)
 
     return heuristic
 
