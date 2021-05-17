@@ -50,9 +50,9 @@ class NeuralNetworkAZ:
         for i in range(self.residual_layers):
             nn = self._create_residual_layer(nn, filters, kernel_size)
 
-        value_head = self._create_value_head(nn)
+        value_head = self._create_value_head(nn, filters)
         
-        policy_head = self._create_policy_head(nn)
+        policy_head = self._create_policy_head(nn, filters)
 
         model = Model(inputs=[input], outputs=[value_head, policy_head])
         model.compile(optimizer=Adam(learning_rate=self.learning_rate),
@@ -112,7 +112,7 @@ class NeuralNetworkAZ:
 
         return layer
         
-    def _create_value_head(self, input):
+    def _create_value_head(self, input, size):
         from tensorflow.keras.layers import (
             Conv2D, BatchNormalization, LeakyReLU, Dense, Flatten
         )
@@ -131,9 +131,9 @@ class NeuralNetworkAZ:
         layer = LeakyReLU()(layer)
 
         layer = Flatten()(layer)
-        # We are using 20 but they used 256 in the paper
+        # They used 256 in the paper
         layer = Dense(
-            20,
+            size,
             activation='linear',
             use_bias=False,
             kernel_regularizer=regularizers.l2(self.regularizer_constant)
@@ -150,14 +150,14 @@ class NeuralNetworkAZ:
 
         return layer
 
-    def _create_policy_head(self, input):
+    def _create_policy_head(self, input, filters):
         from tensorflow.keras.layers import (
             Conv2D, BatchNormalization, LeakyReLU, Dense, Flatten, Activation
         )
         from tensorflow.keras import regularizers
 
         layer = Conv2D(
-            filters=2,
+            filters=filters,
             kernel_size=(1, 1),
             data_format="channels_last",
             padding='same',
