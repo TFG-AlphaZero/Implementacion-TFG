@@ -42,7 +42,7 @@ class NeuralNetworkAZ:
         )
         from tensorflow.keras.models import Model
         from tensorflow.keras.layers import Input
-        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.optimizers import SGD
 
         input = Input(shape=self.input_dim)
         nn = self._create_convolutional_layer(input, filters, kernel_size)
@@ -55,7 +55,7 @@ class NeuralNetworkAZ:
         policy_head = self._create_policy_head(nn, filters)
 
         model = Model(inputs=[input], outputs=[value_head, policy_head])
-        model.compile(optimizer=Adam(learning_rate=self.learning_rate),
+        model.compile(optimizer=SGD(learning_rate=self.learning_rate),
                       loss={
                           'value_head': MeanSquaredError(),
                           'policy_head': CategoricalCrossentropy()
