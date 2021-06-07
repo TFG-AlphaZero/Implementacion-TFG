@@ -5,8 +5,6 @@ import numpy as np
 from gym.spaces import Discrete, Box
 
 from tfg.games import GameEnv, WHITE, BLACK
-from tfg.strategies import MonteCarloTree
-from tfg.util import play
 
 
 class ConnectN(GameEnv):
@@ -174,10 +172,3 @@ def n_connected_heuristic(n):
         return s / np.multiply(*observation.shape)
 
     return heuristic
-
-
-if __name__ == '__main__':
-    game = ConnectN()
-    s1 = MonteCarloTree(game, max_iter=800, reset_tree=False)
-    s2 = MonteCarloTree(game, max_iter=800, reset_tree=False)
-    play(game, s1, s2)

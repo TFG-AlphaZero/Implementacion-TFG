@@ -1,14 +1,11 @@
 import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
-import time
-
 import numpy as np
+import matplotlib.pyplot as plt
 from gym.spaces import Discrete, Box
 
 from tfg.games import GameEnv, WHITE, BLACK
-from tfg.strategies import Minimax, MonteCarloTree
-from tfg.util import play
 
 
 class TicTacToe(GameEnv):
@@ -94,23 +91,39 @@ class TicTacToe(GameEnv):
         return 0, False
 
 
-if __name__ == '__main__':
-    game = TicTacToe()
-    s1 = MonteCarloTree(game, max_iter=10_000, max_time=5.)
-    s2 = Minimax(game)
+def plot_token(i, j, token, color=None, linewidth=4):
+    if color is None:
+        color = 'k'
+    if linewidth is None:
+        linewidth = 4
 
-    now = time.time()
-    p1_wins, draws, p2_wins = play(game, s1, s2, games=50, max_workers=5)
-    print("Monte Carlo as WHITE")
-    print(f" * Monte Carlo wins: {p1_wins}")
-    print(f" * Minimax wins: {p2_wins}")
-    print(f" * Draws: {draws}")
-    print(f"Finished in {time.time() - now} sec")
+    if token == WHITE:
+        x = [j + .2, j + .8]
+        y = [2 - i + .2, 2 - i + .8]
+        plt.plot(x, y, linewidth=linewidth, c=color)
+        plt.plot(x, y[::-1], linewidth=linewidth, c=color)
+    elif token == BLACK:
+        circle = plt.Circle((j + .5, 2 - i + .5), .35, color=color,
+                            linewidth=linewidth, fill=False)
+        plt.gca().add_patch(circle)
 
-    now = time.time()
-    p1_wins, draws, p2_wins = play(game, s2, s1, games=50, max_workers=5)
-    print("Monte Carlo as BLACK")
-    print(f" * Monte Carlo wins: {p2_wins}")
-    print(f" * Minimax wins: {p1_wins}")
-    print(f" * Draws: {draws}")
-    print(f"Finished in {time.time() - now} sec")
+
+def plot_board(board, color=None, linewidth=None):
+    fig = plt.gcf()
+    ax = plt.gca()
+
+    ax.set_axis_off()
+    ax.set_aspect('equal', adjustable='box')
+
+    plt.xlim([0, 3])
+    plt.ylim([0, 3])
+
+    for i in (1, 2):
+        plt.plot([i, i], [0, 3], 'k', linewidth=4)
+        plt.plot([0, 3], [i, i], 'k', linewidth=4)
+
+    for i in range(3):
+        for j in range(3):
+            plot_token(i, j, board[i, j], color, linewidth)
+
+    return fig
