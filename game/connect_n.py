@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
+import matplotlib.pyplot as plt
 from gym.spaces import Discrete, Box
 
 from tfg.games import GameEnv, WHITE, BLACK
@@ -172,3 +173,35 @@ def n_connected_heuristic(n):
         return s / np.multiply(*observation.shape)
 
     return heuristic
+
+
+def plot_board(board, bg_color=None, white_tokens_color=None,
+               black_tokens_color=None):
+
+    if bg_color is None:
+        bg_color = (64 / 255, 128 / 255, 239 / 255)
+    if white_tokens_color is None:
+        white_tokens_color = (208 / 255, 26 / 255, 59 / 255)
+    if black_tokens_color is None:
+        black_tokens_color = (225 / 255, 241 / 255, 47 / 255)
+
+    ax = plt.gca()
+    ax.set_axis_off()
+
+    ax.set_aspect('equal', adjustable='box')
+
+    plt.gcf().patch.set_facecolor(bg_color)
+
+    rows, cols = board.shape
+
+    plt.xlim([0, cols])
+    plt.ylim([0, rows])
+
+    for i in range(rows):
+        for j in range(cols):
+            token = board[i, j]
+            color = (white_tokens_color if token == WHITE else
+                     black_tokens_color if token == BLACK else
+                     'w')
+            circle = plt.Circle((j + .5, i + .5), .4, color=color, ec='k')
+            ax.add_patch(circle)
