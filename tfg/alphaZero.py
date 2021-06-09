@@ -1,11 +1,8 @@
 import copy
-import sys
-sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
 
 import numpy as np
 import os
 import collections
-import itertools
 import time
 import random
 import tfg.alphaZeroConfig as config
@@ -65,7 +62,6 @@ class AlphaZero(Strategy):
         self.noise_fraction = exploration_noise[0]
         self.noise_alpha = exploration_noise[1]
         self.temperature = 0
-        self._buffer = None
 
         self._nn_input = None
         self._nn_barrier = None
@@ -164,8 +160,6 @@ class AlphaZero(Strategy):
         games_counter = 0
 
         buffer = collections.deque(maxlen=buffer_size)
-        # TODO remove this (here just for compatibility with debugger)
-        self._buffer = buffer
 
         while not is_done():
             # Add to buffer the latest played games

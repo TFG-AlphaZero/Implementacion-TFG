@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
-
 from functools import reduce
 
 from joblib import Parallel, delayed
@@ -18,22 +15,21 @@ def play(game, white, black, games=1, max_workers=None,
         game (tfg.games.GameEnv): Game to be played.
         white (tfg.strategies.Strategy): Strategy for WHITE player.
         black (tfg.strategies.Strategy): Strategy for BLACK player.
-        games (:obj:`int`, optional): Number of games that will be played.
+        games (int): Number of games that will be played.
             If max_workers is None they will be played iteratively.
             Otherwise, games / max_workers will be played iteratively by each
             worker. Defaults to 1.
-        max_workers (:obj:`int`, optional): If set, maximum number of processes
-            that will be launched to play simultaneously. Not recommended if
-            one of the players is tfg.strategies.HumanStrategy. Defaults to
-            None.
-        render (:obj:`bool`, optional): Whether to render the game after every
-            turn or not. Defaults to False.
-        print_results (:obj:`bool`, optional): Whether to print the results at
-            the end of each game. Defaults to False.
+        max_workers (int): If set, maximum number of processes that will be
+            launched to play simultaneously. Not recommended if one of the
+            players is tfg.strategies.HumanStrategy. Defaults to None.
+        render (bool): Whether to render the game after every turn or not.
+            Defaults to False.
+        print_results (bool): Whether to print the results at the end of each
+            game. Defaults to False.
 
     Returns:
-        (:obj;`int`, :obj;`int`, :obj;`int`): Cumulative results of all games
-            in the format (WHITE wins, draws, BLACK wins).
+        (int, int, int): Cumulative results of all games in the format
+            (WHITE wins, draws, BLACK wins).
 
     """
 
@@ -92,6 +88,17 @@ def play(game, white, black, games=1, max_workers=None,
 
 
 def get_games_per_worker(games, max_workers):
+    """Calculates the number of games each processor should play.
+
+    Args:
+        games (int): Total number of games to be played.
+        max_workers (int): Number of processors that will play those games.
+
+    Returns:
+         list[int]: Number of games each processor should play. The list
+            contains one element per processor.
+
+    """
     d_games = games // max_workers
     r_games = games % max_workers
     n_games = [d_games] * max_workers
@@ -102,6 +109,10 @@ def get_games_per_worker(games, max_workers):
 
 
 def enable_gpu():
+    """Utility method that sets memory growth for all GPUs.
+
+    Otherwise they would not work.
+    """
     import tensorflow as tf
 
     # GPU didn't work otherwise

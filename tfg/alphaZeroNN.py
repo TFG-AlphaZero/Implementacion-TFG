@@ -1,7 +1,3 @@
-import sys
-sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
-
-
 class NeuralNetworkAZ:
     """Class implementing AlphaZero's neural network."""
 

@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/Documents/Juan Carlos/Estudios/Universidad/5º Carrera/TFG Informatica/ImplementacionTFG')
-
 import abc
 import copy
 import random
@@ -63,7 +60,7 @@ class HumanStrategy(Strategy):
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
-            name (object, optional): Name that will be printed for this player.
+            name (object): Name that will be printed for this player.
                 Defaults to 'PLAYER'.
 
         """
@@ -303,8 +300,8 @@ class MonteCarloTreeNode(dict):
 
         Args:
             env (tfg.games.GameEnv): Game containing this node's state.
-            update_fun (function, optional): Void function that takes newly
-                created MonteCarloTreeNode and initializes custom statistics.
+            update_fun (function): Void function that takes newly created
+                MonteCarloTreeNode and initializes custom statistics.
 
         """
         actions = env.legal_actions()
@@ -322,7 +319,7 @@ class MonteCarloTreeNode(dict):
 
         Args:
             value (float): Observed value that will update this node's info.
-            update_fun (function, optional): Void function that takes this
+            update_fun (function): Void function that takes this
                 MonteCarloTreeNode and updates custom statistics.
 
         """
