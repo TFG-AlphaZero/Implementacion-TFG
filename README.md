@@ -28,4 +28,4 @@ You can also directly instantiate and call AlphaZero class.
 
 ## License 📄
 
-This project is licensed under the [MIT](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/LICENSE)
+This project is licensed under the [MIT License](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/LICENSE)
