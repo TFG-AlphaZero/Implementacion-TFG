@@ -1,7 +1,7 @@
 # Deep Learning Applied to Turn-based Board Games
 This project is part of the Final Degree Project for Computer Science at Universidad Complutense de Madrid (UCM).
 
-AlphaZero is a general-purpose reinforcement learning algorithm developed by DeepMind in 2017. It can learn from _tabula rasa_, given no domain knowledge except the game rules, and achieves superhuman performance in combinational games such as Go and Chess. It uses self-play, so that it starts playing randomly against itself and gradually learns further comprehension of the game.
+[AlphaZero](https://deepmind.com/blog/article/alphazero-shedding-new-light-grand-games-chess-shogi-and-go) is a general-purpose reinforcement learning algorithm developed by [DeepMind](https://deepmind.com/) in 2017. It can learn from _tabula rasa_, given no domain knowledge except the game rules, and achieves superhuman performance in combinational games such as Go and Chess. It uses self-play, so that it starts playing randomly against itself and gradually learns further comprehension of the game.
 
 In this project, we develop our own version of AlphaZero, capable of being executed on a personal computer. 
 
