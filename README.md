@@ -1,5 +1,5 @@
 # Deep Learning Applied to Turn-based Board Games
-This project is a Final Degree Project for Computer Science at Universidad Complutense de Madrid (UCM).
+This project is part of the Final Degree Project for Computer Science at Universidad Complutense de Madrid (UCM).
 
 In this project, we develop our own version of AlphaZero, capable of being executed on a personal computer.
 
