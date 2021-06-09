@@ -1,7 +1,11 @@
 # Deep Learning Applied to Turn-based Board Games
 This project is part of the Final Degree Project for Computer Science at Universidad Complutense de Madrid (UCM).
 
-In this project, we develop our own version of AlphaZero, capable of being executed on a personal computer.
+AlphaZero is a general-purpose reinforcement learning algorithm developed by DeepMind in 2017. It can learn from _tabula rasa_, given no domain knowledge except the game rules, and achieves superhuman performance in combinational games such as Go and Chess. It uses self-play, so that it starts playing randomly against itself and gradually learns further comprehension of the game.
+
+In this project, we develop our own version of AlphaZero, capable of being executed on a personal computer. 
+
+Due to the lack of powerful computational resources, we have focused in less complex games such as Tic-Tac-Toe and Connect 4. However, our implementation is highly versatile and it can be used for any game very easily. In order to verify that our implementation is learning properly, we have tested it against other implemented algorithms (Minimax and Monte Carlo Tree Search).
 
 ## Getting Started 🚀
 
@@ -13,12 +17,11 @@ The repository is divided into multiple folders:
 
 ### Prerequisites 📋
 
-See [Requirements](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/requirements.txt)
+See [Requirements](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/requirements.txt).
 
 ## Running the code ⚙️
 
-Tests performed may be executed from any Jupyter Notebooks included in the experiments folder. 
-You can also directly instantiate and call AlphaZero class.
+You can see an example of execution in the Jupyter Notebooks included in the [experiments](https://github.com/TFG-AlphaZero/Implementacion-TFG/tree/master/experiments) folder.
 
 ## Authors ✒️
 
@@ -28,4 +31,4 @@ You can also directly instantiate and call AlphaZero class.
 
 ## License 📄
 
-This project is licensed under the [MIT License](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/LICENSE)
+This project is licensed under the [MIT License](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/LICENSE).
