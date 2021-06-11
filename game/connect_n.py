@@ -59,17 +59,29 @@ class ConnectN(GameEnv):
         return self.board.copy()
 
     def render(self, mode='human'):
-        mapping = {-1: '○', 0: ' ', 1: '●'}
-        tokens = [[mapping[cell] for cell in row] for row in self.board]
-        print(f"Connect {self._n}")
-        print("\n".join(
-            ['|' + '|'.join([token for token in row]) + '|'
-             for row in reversed(tokens)]
-        ))
-        cols = self.action_space.n
-        print('-'.join(['+'] * (cols + 1)))
-        print(' ' + ' '.join(['^'] * cols))
-        print(' ' + ' '.join(str(i) for i in range(cols)))
+        if mode == 'human':
+            mapping = {-1: '○', 0: ' ', 1: '●'}
+            tokens = [[mapping[cell] for cell in row] for row in self.board]
+            print(f"Connect {self._n}")
+            print("\n".join(
+                ['|' + '|'.join([token for token in row]) + '|'
+                 for row in reversed(tokens)]
+            ))
+            cols = self.action_space.n
+            print('-'.join(['+'] * (cols + 1)))
+            print(' ' + ' '.join(['^'] * cols))
+            print(' ' + ' '.join(str(i) for i in range(cols)))
+        elif mode == 'plt':
+            plt.figure()
+            plot_board(self.board)
+            rows, cols = self.observation_space.shape
+            for j in range(cols):
+                plt.text(j + .5, -.25, str(j), c='w', size=14, ha='center',
+                         va='center')
+            plt.show()
+        else:
+            raise ValueError('unknown render mode; valid: ' +
+                             ', '.join(self.metadata['render.modes']))
 
     def _check_action(self, action):
         rows, _ = self.observation_space.shape
@@ -202,3 +214,10 @@ def plot_board(board, bg_color=None, white_tokens_color=None,
                      'w')
             circle = plt.Circle((j + .5, i + .5), .4, color=color, ec='k')
             ax.add_patch(circle)
+
+
+if __name__ == '__main__':
+    game = ConnectN()
+    game.step(3)
+    game.step(5)
+    game.render('plt')

@@ -17,7 +17,7 @@ class GameEnv(gym.Env, abc.ABC):
     and to know the winner in the current state.
 
     """
-    metadata = {'render.modes': ['human']}
+    metadata = {'render.modes': ['human', 'plt']}
     reward_range = (-1, 1)
 
     @property

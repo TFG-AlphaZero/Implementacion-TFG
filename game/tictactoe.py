@@ -47,11 +47,24 @@ class TicTacToe(GameEnv):
         return self.board.copy()
 
     def render(self, mode='human'):
-        mapping = {-1: 'O', 0: ' ', 1: 'X'}
-        tokens = [[mapping[cell] for cell in row] for row in self.board]
-        print("\n-+-+-\n".join(
-            ['|'.join([token for token in row]) for row in tokens]
-        )+'\n')
+        if mode == 'human':
+            mapping = {-1: 'O', 0: ' ', 1: 'X'}
+            tokens = [[mapping[cell] for cell in row] for row in self.board]
+            print("\n-+-+-\n".join(
+                ['|'.join([token for token in row]) for row in tokens]
+            )+'\n')
+        elif mode == 'plt':
+            plt.figure()
+            plot_board(self.board)
+            for i in range(9):
+                r, c = self._parse_action(i)
+                if self.board[r, c] == 0:
+                    plt.text(c + .5, 2 - r + .5, str(i), c='gray', size=18,
+                             weight='bold', ha='center', va='center')
+            plt.show()
+        else:
+            raise ValueError('unknown render mode; valid: ' +
+                             ', '.join(self.metadata["render.modes"]))
 
     @staticmethod
     def _parse_action(action):

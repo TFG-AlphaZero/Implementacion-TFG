@@ -7,7 +7,7 @@ from tfg.games import WHITE, BLACK
 
 
 def play(game, white, black, games=1, max_workers=None,
-         render=False, print_results=False):
+         render=None, print_results=False):
     """Play n games of the provided game where players are using strategies
     white and black, respectively.
 
@@ -22,8 +22,8 @@ def play(game, white, black, games=1, max_workers=None,
         max_workers (int): If set, maximum number of processes that will be
             launched to play simultaneously. Not recommended if one of the
             players is tfg.strategies.HumanStrategy. Defaults to None.
-        render (bool): Whether to render the game after every turn or not.
-            Defaults to False.
+        render (str): Render mode to be used. If None, then the board will
+            not be rendered. Defaults to None.
         print_results (bool): Whether to print the results at the end of each
             game. Defaults to False.
 
@@ -37,7 +37,8 @@ def play(game, white, black, games=1, max_workers=None,
         def print_winner():
             if not print_results:
                 return
-            game.render(mode='human')
+            if render is not None:
+                game.render(mode=render)
             winner = game.winner()
             if winner == 0:
                 print("DRAW")
@@ -63,8 +64,8 @@ def play(game, white, black, games=1, max_workers=None,
             observation = game.reset()
             white.update(None)
             black.update(None)
-            if render and not isinstance(white, HumanStrategy):
-                game.render()
+            if render is not None and not isinstance(white, HumanStrategy):
+                game.render(mode=render)
 
             while True:
                 observation, done = move(observation)
@@ -72,9 +73,9 @@ def play(game, white, black, games=1, max_workers=None,
                     results[get_winner_index()] += 1
                     print_winner()
                     break
-                elif (render and
+                elif (render is not None and
                       not isinstance(players[game.to_play], HumanStrategy)):
-                    game.render()
+                    game.render(mode=render)
 
         return tuple(results)
 

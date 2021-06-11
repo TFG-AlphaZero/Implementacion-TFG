@@ -55,17 +55,20 @@ class Strategy(abc.ABC):
 class HumanStrategy(Strategy):
     """Implementation of Strategy so that humans can play a game."""
 
-    def __init__(self, env, name='PLAYER'):
+    def __init__(self, env, name='PLAYER', render_mode='human'):
         """
 
         Args:
             env (tfg.games.GameEnv): Game this strategy is for.
             name (object): Name that will be printed for this player.
                 Defaults to 'PLAYER'.
+            render_mode (str): Value passed to mode attribute in
+                tfg.games.GameEnv.render method. Defaults to 'human'.
 
         """
         self.env = env
         self.name = str(name)
+        self.render_mode = render_mode
 
     def move(self, observation=None):
         """Renders the game and asks the player to input a move.
@@ -82,7 +85,8 @@ class HumanStrategy(Strategy):
                 of the environment (the game).
 
         """
-        self.env.render(mode='human')
+        if self.render_mode is not None:
+            self.env.render(mode=self.render_mode)
         legal_actions = self.env.legal_actions()
         t = self.env.action_space.dtype.type
         print()
