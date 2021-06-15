@@ -7,6 +7,8 @@ In this project, we develop our own version of AlphaZero, capable of being execu
 
 Due to the lack of powerful computational resources, we have focused in less complex games such as Tic-Tac-Toe and Connect 4. However, our implementation is highly versatile and it can be used for any game very easily. In order to verify that our implementation is learning properly, we have tested it against other implemented algorithms (Minimax and Monte Carlo Tree Search).
 
+A thoroughly description of the project can be found in the [project memory](https://github.com/TFG-AlphaZero/Implementacion-TFG/blob/master/TFG%20Deep%20learning%20applied%20to%20turn-based%20board%20games.pdf).
+
 ## Getting Started 🚀
 
 This repository is divided into multiple folders:
