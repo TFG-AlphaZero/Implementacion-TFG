@@ -2,7 +2,7 @@ numpy==1.19.2
 ray==1.2.0
 matplotlib==3.3.4
 joblib==1.0.1
-tensorflow==2.4.1
+tensorflow==2.5.3
 gym==0.18.0
 scipy==1.6.1
 Pillow==8.2.0
